@@ -67,7 +67,8 @@ export class DayNight {
     this.buildings.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) {
-        (mesh.material as THREE.MeshLambertMaterial).emissive.setHex(p.emissive);
+        const mat = mesh.material as THREE.MeshLambertMaterial;
+        if (mat && mat.emissive) mat.emissive.setHex(p.emissive);
       }
     });
     document.body.classList.toggle("night", name === "night");

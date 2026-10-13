@@ -5,7 +5,7 @@ import type { BuildingUserData } from "./interact";
 
 export interface SearchItem {
   name: string;
-  kind: "building" | "water";
+  kind: "building" | "water" | "gate";
   target: THREE.Vector3;
   distance: number; // 建议的落点距离
   mesh?: THREE.Mesh;
@@ -30,7 +30,7 @@ export function initSearch(
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "suggestion";
-      btn.innerHTML = `<span class="tag">${it.kind === "water" ? "湖" : "楼"}</span>${it.name}`;
+      btn.innerHTML = `<span class="tag">${it.kind === "water" ? "湖" : it.kind === "gate" ? "门" : "楼"}</span>${it.name}`;
       btn.addEventListener("pointerdown", (e) => e.preventDefault()); // 防止输入框失焦抢点击
       btn.addEventListener("click", () => {
         hide();

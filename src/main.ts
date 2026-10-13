@@ -6,6 +6,7 @@ import {
   buildBuildings,
   buildGreen,
   buildGround,
+  buildPaving,
   buildRoads,
   buildWater,
 } from "./sceneBuilder";
@@ -21,9 +22,12 @@ import {
 } from "./interact";
 import { buildingSearchItem, initSearch, type SearchItem } from "./search";
 import { DayNight, type PresetName } from "./dayNight";
+import { buildActivity, buildGate, buildLibrary, gateLabel } from "./landmarks";
+import { Navigator } from "./navigation";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const statsEl = document.querySelector<HTMLDivElement>("#hud-stats")!;
+const navStatusEl = document.querySelector<HTMLDivElement>("#nav-status")!;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -35,7 +39,7 @@ app.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 2, 9000);
-camera.position.set(650, 620, 1050); // 校区东南侧上空，朝北俯瞰
+camera.position.set(650, 620, 1050);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 10, 0);
@@ -82,24 +86,43 @@ const els: InfoCardEls = {
   area: document.querySelector("#ic-area")!,
   src: document.querySelector("#ic-src")!,
 };
-document.querySelector("#ic-close")!.addEventListener("click", () => {
-  picker?.clearSelection();
-});
 let flyTargetBuilding: THREE.Mesh | null = null;
-document.querySelector("#ic-fly")!.addEventListener("click", () => {
-  if (flyTargetBuilding) focusBuilding(flyTargetBuilding);
-});
-
-let dayNight: DayNight | null = null;
-let picker: BuildingPicker | null = null;
-
-function focusBuilding(mesh: THREE.Mesh): void {
+function focusBuilding(mesh: THREE.Mesh | null): void {
+  if (!mesh) return;
   const d = mesh.userData as BuildingUserData;
   flyTo(camera, controls, new THREE.Vector3(d.cx, d.height / 2, d.cy), Math.max(150, Math.sqrt(d.area) * 3.4));
 }
+document.querySelector("#ic-close")!.addEventListener("click", () => picker?.clearSelection());
+document.querySelector("#ic-fly")!.addEventListener("click", () => focusBuilding(flyTargetBuilding));
 
-// 用户手动拖拽时中断飞行
-renderer.domElement.addEventListener("pointerdown", cancelFly);
+let dayNight: DayNight | null = null;
+let picker: BuildingPicker | null = null;
+let navigator: Navigator | null = null;
+let navMode = false;
+
+const raycaster = new THREE.Raycaster();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let downAt: [number, number] | null = null;
+
+renderer.domElement.addEventListener("pointerdown", (e) => {
+  downAt = [e.clientX, e.clientY];
+  cancelFly();
+});
+renderer.domElement.addEventListener("pointerup", (e) => {
+  const d = downAt;
+  downAt = null;
+  if (!d || !navMode || !navigator) return;
+  if (e.pointerType === "touch" && Math.hypot(e.clientX - d[0], e.clientY - d[1]) > 10) return;
+  if (e.pointerType !== "touch" && Math.hypot(e.clientX - d[0], e.clientY - d[1]) > 6) return;
+  raycaster.setFromCamera(
+    new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1),
+    camera,
+  );
+  const pt = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(groundPlane, pt)) {
+    navigator.clickGround(pt.x, pt.z);
+  }
+});
 
 async function loadScene(): Promise<void> {
   const res = await fetch("data/scene.json");
@@ -108,16 +131,43 @@ async function loadScene(): Promise<void> {
 
   buildGround(scene);
   buildGreen(scene, data.green);
+  buildPaving(scene, data.paving);
   buildWater(scene, data.water);
   buildRoads(scene, data.roads);
-  const buildings = buildBuildings(scene, data.buildings);
+
+  const generic = data.buildings.filter((b) => !b.landmark);
+  const buildings = buildBuildings(scene, generic);
+  // 地标精模组挂进同一拾取组（递归射线）
+  for (const b of data.buildings) {
+    if (b.landmark === "library") {
+      buildings.add(buildLibrary(b));
+    } else if (b.landmark === "activity") {
+      buildings.add(buildActivity(b));
+    }
+  }
   const treeCount = buildTrees(scene, data.green, data.roads, data.water);
+
+  for (const g of data.gates) {
+    scene.add(buildGate(g));
+    const lb = gateLabel(g);
+    labels.add(lb.text, lb.pos, 3000, { cls: "gate" });
+  }
 
   dayNight = new DayNight(scene, hemi, sun, buildings);
   dayNight.apply("day");
 
+  navigator = new Navigator(scene, data.graph);
+  navigator.onStatus = (t) => {
+    navStatusEl.textContent = t || (navMode ? "点击道路或地面设置起点" : "");
+  };
+
   picker = new BuildingPicker(renderer.domElement, camera, buildings, {
     onSelect: (mesh) => {
+      if (navMode && navigator) {
+        const d = mesh.userData as BuildingUserData;
+        navigator.setEndBuilding(d.cx, d.cy);
+        return;
+      }
       flyTargetBuilding = mesh;
       fillInfoCard(mesh, els);
     },
@@ -132,8 +182,8 @@ async function loadScene(): Promise<void> {
   const byName = new Map<string, THREE.Mesh>();
   for (const mesh of buildings.children as THREE.Mesh[]) {
     const d = mesh.userData as BuildingUserData;
-    if (!d.name) continue;
-    if (!byName.has(d.name)) byName.set(d.name, mesh); // 同名楼（如兰园#2）只留第一个
+    if (!d.name || d.name.includes("门")) continue;
+    if (!byName.has(d.name)) byName.set(d.name, mesh);
     items.push(buildingSearchItem(mesh));
   }
   for (const w of data.water) {
@@ -148,11 +198,24 @@ async function loadScene(): Promise<void> {
       distance: Math.max(260, r * 2.6),
     });
   }
+  for (const g of data.gates) {
+    items.push({
+      name: g.name,
+      kind: "gate",
+      target: new THREE.Vector3(g.x, 0, -g.y),
+      distance: 320,
+    });
+  }
   initSearch(
     document.querySelector<HTMLInputElement>("#search")!,
     document.querySelector<HTMLElement>("#suggestions")!,
     items,
     (it) => {
+      if (navMode && navigator) {
+        navigator.setEndBuilding(it.target.x, it.target.z);
+        flyTo(camera, controls, it.target, it.distance);
+        return;
+      }
       if (it.mesh) {
         picker!.select(it.mesh);
         focusBuilding(it.mesh);
@@ -175,8 +238,7 @@ async function loadScene(): Promise<void> {
     labels.add(w.name, new THREE.Vector3(cx, 2, -cy), 2000, {
       cls: "water",
       onClick: () => {
-        const [cx2, cy2] = bboxCenter(w.outers[0]);
-        flyTo(camera, controls, new THREE.Vector3(cx2, 0, -cy2), 400);
+        flyTo(camera, controls, new THREE.Vector3(cx, 0, -cy), 400);
       },
     });
   }
@@ -192,12 +254,26 @@ loadScene().catch((e: unknown) => {
   statsEl.classList.add("err");
 });
 
-// 工具栏
+// ---- 工具栏 ----
 document.querySelector<HTMLButtonElement>("#tb-labels")!.addEventListener("click", (e) => {
   const btn = e.currentTarget as HTMLButtonElement;
   labels.enabled = !labels.enabled;
   btn.classList.toggle("on", labels.enabled);
 });
+
+const navBtn = document.querySelector<HTMLButtonElement>("#tb-nav")!;
+function setNavMode(v: boolean): void {
+  navMode = v;
+  navBtn.classList.toggle("on", v);
+  document.querySelector("#nav-panel")!.classList.toggle("open", v);
+  navigator?.setActive(v);
+  if (v) picker?.clearSelection();
+  navBtn.blur();
+}
+navBtn.addEventListener("click", () => setNavMode(!navMode));
+document.querySelector("#nav-clear")!.addEventListener("click", () => navigator?.clearRoute());
+document.querySelector("#nav-exit")!.addEventListener("click", () => setNavMode(false));
+
 for (const name of ["day", "dusk", "night"] as PresetName[]) {
   document.querySelector<HTMLButtonElement>(`#preset-${name}`)!.addEventListener("click", (e) => {
     picker?.clearSelection();
@@ -216,5 +292,4 @@ renderer.setAnimationLoop(() => {
   labels.render(scene, camera);
 });
 
-// 调试入口（控制台用）
 Object.assign(window, { __huxi: { renderer, scene, camera, controls } });

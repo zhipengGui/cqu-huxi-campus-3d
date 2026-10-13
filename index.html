@@ -60,6 +60,25 @@
       border-radius: 4px; background: rgba(127, 160, 200, 0.25); color: var(--text);
     }
 
+    #nav-panel {
+      position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 10;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+      border-radius: 12px; padding: 10px 14px; display: none;
+      box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2); font-size: 13px; color: var(--text);
+      text-align: center;
+    }
+    #nav-panel.open { display: block; }
+    #nav-status { font-weight: 600; margin-bottom: 8px; min-width: 200px; }
+    #nav-actions { display: flex; gap: 8px; justify-content: center; }
+    #nav-actions button {
+      padding: 5px 14px; border: 1px solid var(--line); border-radius: 7px;
+      background: rgba(127, 127, 127, 0.08); color: var(--text); font-size: 12px; cursor: pointer;
+    }
+    #nav-actions button:hover { background: rgba(90, 140, 200, 0.2); }
+
+    .map-label.gate { color: #2e7d43; background: rgba(232, 246, 236, 0.9); }
+    body.night .map-label.gate { color: #8fd6a5; background: rgba(16, 42, 28, 0.85); }
+
     #toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
     .tb {
       padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px;
@@ -117,7 +136,10 @@
     </div>
     <div id="hud-stats" class="muted">正在加载场景数据…</div>
     <div id="toolbar">
-      <button id="tb-labels" class="tb on" type="button">标注</button>
+      <div class="seg">
+        <button id="tb-labels" class="tb on" type="button">标注</button>
+        <button id="tb-nav" class="tb" type="button">导航</button>
+      </div>
       <div class="seg">
         <button id="preset-day" class="tb on" type="button">昼</button>
         <button id="preset-dusk" class="tb" type="button">昏</button>
@@ -125,6 +147,13 @@
       </div>
     </div>
     <div class="muted hint">左键旋转 · 滚轮缩放 · 右键平移 · 点楼看信息</div>
+  </div>
+  <div id="nav-panel">
+    <div id="nav-status">点击道路或地面设置起点</div>
+    <div id="nav-actions">
+      <button id="nav-clear" type="button">清除路线</button>
+      <button id="nav-exit" type="button">退出导航</button>
+    </div>
   </div>
   <div id="info-card">
     <div id="ic-title"></div>

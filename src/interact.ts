@@ -75,7 +75,8 @@ export class BuildingPicker {
   }
 
   private setEmissive(mesh: THREE.Mesh, hex: number): void {
-    (mesh.material as THREE.MeshLambertMaterial).emissive.setHex(hex);
+    const mat = mesh.material as THREE.MeshLambertMaterial;
+    if (mat && mat.emissive) mat.emissive.setHex(hex);
   }
 
   private restore(mesh: THREE.Mesh): void {
@@ -84,7 +85,7 @@ export class BuildingPicker {
 
   private cast(ndcX: number, ndcY: number): THREE.Mesh | null {
     this.raycaster.setFromCamera(this.pointerNdc.set(ndcX, ndcY), this.camera);
-    const hits = this.raycaster.intersectObjects(this.group.children, false);
+    const hits = this.raycaster.intersectObjects(this.group.children, true);
     return (hits[0]?.object as THREE.Mesh) ?? null;
   }
 

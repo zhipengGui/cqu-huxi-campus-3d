@@ -13,8 +13,10 @@ export interface Building {
   id: number | string;
   name: string;
   type: string;
+  style: string;
+  landmark: string; // "" | "library" | "activity"
   height: number;
-  heightSource: "tag:height" | "tag:levels" | "default";
+  heightSource: "tag:height" | "tag:levels" | "default" | "override";
   area: number;
   polygon: [number, number][];
   holes: [number, number][][];
@@ -32,8 +34,22 @@ export interface Area {
   id: number | string;
   name: string;
   kind?: string;
+  sport?: string;
   outers: [number, number][][];
   inners: [number, number][][];
+}
+
+export interface Gate {
+  id: string;
+  x: number;
+  y: number;
+  angle: number;
+  name: string;
+}
+
+export interface RoadGraph {
+  nodes: [number, number][];
+  edges: [number, number, number][]; // [a, b, length]
 }
 
 export interface SceneData {
@@ -42,5 +58,8 @@ export interface SceneData {
   roads: Road[];
   water: Area[];
   green: Area[];
+  paving: Area[];
+  gates: Gate[];
+  graph: RoadGraph;
   trees: [number, number][];
 }
