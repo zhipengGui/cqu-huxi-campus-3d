@@ -1,0 +1,1 @@
+{"_readme": "楼高人工校准表：byId 按 OSM 要素 id（字符串）匹配，byName 按楼名匹配；值给 {\"height\": 米} 或 {\"levels\": 层数}。修改后重跑 py scripts/build_scene_data.py。注意校准值请以实际楼栋为准，不要保留猜测数据。", "byId": {}, "byName": {}}

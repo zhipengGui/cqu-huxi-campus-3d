@@ -2,28 +2,140 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>重庆大学虎溪校区 3D 地图</title>
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, "Microsoft YaHei", sans-serif; }
+    :root {
+      --panel-bg: rgba(255, 255, 255, 0.88);
+      --text: #333;
+      --muted: #888;
+      --line: rgba(0, 0, 0, 0.08);
+      --pill-bg: rgba(255, 255, 255, 0.92);
+      --pill-text: #3a4a5c;
+    }
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, "Microsoft YaHei", sans-serif; color: var(--text); }
+    body.night {
+      --panel-bg: rgba(18, 26, 42, 0.88);
+      --text: #d5e2f5;
+      --muted: #7a8aa5;
+      --line: rgba(255, 255, 255, 0.12);
+      --pill-bg: rgba(22, 32, 52, 0.85);
+      --pill-text: #a9c2e8;
+    }
     #app { position: fixed; inset: 0; }
+    #app canvas { display: block; }
+
     #hud {
       position: fixed; top: 12px; left: 12px; z-index: 10;
-      background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(6px);
-      border-radius: 10px; padding: 10px 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-      font-size: 13px; color: #333; line-height: 1.7; max-width: 320px;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+      border-radius: 12px; padding: 12px 14px; width: 272px;
+      box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+      font-size: 13px; line-height: 1.6;
     }
-    #hud .title { font-weight: 700; font-size: 15px; }
-    #hud .muted { color: #888; font-size: 12px; }
-    #hud .err { color: #b00020; }
+    #hud .title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+    #hud .muted { color: var(--muted); font-size: 12px; }
+    #hud .err { color: #d24a4a; }
+    #hud-stats { margin-top: 8px; }
+
+    #search-wrap { position: relative; margin: 8px 0 2px; }
+    #search {
+      width: 100%; box-sizing: border-box; padding: 7px 10px;
+      border: 1px solid var(--line); border-radius: 8px;
+      font-size: 13px; background: rgba(127, 127, 127, 0.08); color: var(--text); outline: none;
+    }
+    #search:focus { border-color: #7ba7d7; }
+    #suggestions {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+      background: var(--panel-bg); border-radius: 8px; margin-top: 4px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); overflow: hidden;
+    }
+    #suggestions.open { display: block; }
+    .suggestion {
+      display: block; width: 100%; text-align: left; padding: 7px 10px;
+      border: none; background: none; color: var(--text); font-size: 13px; cursor: pointer;
+    }
+    .suggestion:hover, .suggestion.first { background: rgba(127, 160, 200, 0.18); }
+    .suggestion .tag {
+      display: inline-block; font-size: 11px; padding: 0 5px; margin-right: 6px;
+      border-radius: 4px; background: rgba(127, 160, 200, 0.25); color: var(--text);
+    }
+
+    #toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+    .tb {
+      padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px;
+      background: rgba(127, 127, 127, 0.08); color: var(--muted); font-size: 12px; cursor: pointer;
+    }
+    .tb.on { color: var(--text); background: rgba(90, 140, 200, 0.22); border-color: rgba(90, 140, 200, 0.5); }
+    .seg { display: flex; gap: 4px; }
+
+    #info-card {
+      position: fixed; top: 12px; right: 12px; z-index: 10; width: 250px;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+      border-radius: 12px; padding: 12px 14px; display: none;
+      box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18); font-size: 13px; line-height: 1.7;
+    }
+    #info-card.open { display: block; }
+    #ic-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; padding-right: 20px; }
+    #info-card .row { display: flex; gap: 8px; }
+    #info-card .k { color: var(--muted); flex: none; width: 34px; }
+    #ic-src { font-size: 12px; color: var(--muted); }
+    #ic-src.calibrating { color: #b8863b; }
+    #ic-actions { display: flex; gap: 8px; margin-top: 8px; }
+    #ic-actions button {
+      flex: 1; padding: 5px 0; border: 1px solid var(--line); border-radius: 7px;
+      background: rgba(127, 127, 127, 0.08); color: var(--text); font-size: 12px; cursor: pointer;
+    }
+    #ic-actions button:hover { background: rgba(90, 140, 200, 0.2); }
+
+    .map-label {
+      padding: 1px 7px; border-radius: 6px; font-size: 12px; white-space: nowrap;
+      background: var(--pill-bg); color: var(--pill-text);
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.18); cursor: pointer; user-select: none;
+    }
+    .map-label.water { color: #2a6f9e; background: rgba(230, 244, 252, 0.88); }
+    body.night .map-label.water { color: #8ec7ee; background: rgba(18, 40, 60, 0.85); }
+    .map-label:hover { background: rgba(255, 220, 140, 0.95); color: #333; }
+
+    @media (max-width: 640px) {
+      #hud { width: auto; right: 12px; padding: 10px 12px; }
+      #hud .title { font-size: 14px; margin-bottom: 4px; }
+      .hint { display: none; }
+      #info-card {
+        top: auto; bottom: 12px; left: 12px; right: 12px; width: auto;
+      }
+      .map-label { font-size: 11px; padding: 1px 6px; }
+    }
   </style>
 </head>
 <body>
   <div id="app"></div>
   <div id="hud">
     <div class="title">重庆大学虎溪校区 · 3D 地图</div>
-    <div id="hud-status" class="muted">正在加载场景数据…</div>
-    <div class="muted">左键拖拽旋转 · 滚轮缩放 · 右键平移</div>
+    <div id="search-wrap">
+      <input id="search" placeholder="搜索楼栋 / 湖泊，如：图书馆、缙湖" autocomplete="off" />
+      <div id="suggestions"></div>
+    </div>
+    <div id="hud-stats" class="muted">正在加载场景数据…</div>
+    <div id="toolbar">
+      <button id="tb-labels" class="tb on" type="button">标注</button>
+      <div class="seg">
+        <button id="preset-day" class="tb on" type="button">昼</button>
+        <button id="preset-dusk" class="tb" type="button">昏</button>
+        <button id="preset-night" class="tb" type="button">夜</button>
+      </div>
+    </div>
+    <div class="muted hint">左键旋转 · 滚轮缩放 · 右键平移 · 点楼看信息</div>
+  </div>
+  <div id="info-card">
+    <div id="ic-title"></div>
+    <div class="row"><span class="k">类型</span><span id="ic-type"></span></div>
+    <div class="row"><span class="k">高度</span><span id="ic-height"></span></div>
+    <div class="row"><span class="k">占地</span><span id="ic-area"></span></div>
+    <div class="row"><span class="k">来源</span><span id="ic-src"></span></div>
+    <div id="ic-actions">
+      <button id="ic-fly" type="button">镜头定位</button>
+      <button id="ic-close" type="button">关闭</button>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

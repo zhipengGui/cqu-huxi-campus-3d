@@ -17,6 +17,7 @@ import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SNAP_DIR = os.path.join(ROOT, "data", "snapshots")
+OVERRIDES_PATH = os.path.join(ROOT, "data", "height_overrides.json")
 OUT_PATH = os.path.join(ROOT, "public", "data", "scene.json")
 
 LEVEL_HEIGHT = 3.3  # metres per storey when estimating from levels/area
@@ -41,6 +42,13 @@ def load_snapshot():
     if not snaps:
         raise SystemExit("no snapshot found, run fetch_osm.py first")
     with open(snaps[-1], encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_overrides():
+    if not os.path.exists(OVERRIDES_PATH):
+        return {"byId": {}, "byName": {}}
+    with open(OVERRIDES_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -240,6 +248,7 @@ def main():
             trees.append(proj.xy(nd["lon"], nd["lat"]))
 
     # -- heights ------------------------------------------------------------
+    overrides = load_overrides()
     out_buildings = []
     for b in buildings:
         area = sum(shoelace_area(o) for o in b["outers"])
@@ -247,6 +256,16 @@ def main():
         if h is None:
             h = round(default_levels(area) * LEVEL_HEIGHT, 1)
             src = "default"
+        ov = overrides["byId"].get(str(b["id"]))
+        if ov is None and b["name"]:
+            ov = overrides["byName"].get(b["name"])
+        if ov:
+            if "levels" in ov:
+                h = round(float(ov["levels"]) * LEVEL_HEIGHT, 1)
+                src = "override"
+            elif "height" in ov:
+                h = round(float(ov["height"]), 1)
+                src = "override"
         out_buildings.append({
             "id": b["id"], "name": b["name"],
             "type": b["tags"].get("building", "yes"),

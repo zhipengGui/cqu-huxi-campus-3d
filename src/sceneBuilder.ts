@@ -1,10 +1,11 @@
 import * as THREE from "three";
-import type { Area, Building, SceneData } from "./types";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { Area, Building, Road } from "./types";
 
 /** 场景坐标系约定：scene.json 的 X(东)/Y(北) 映射到 three.js 世界
  *  x = 东, z = -北（即 -z 朝北）, y 向上。 */
 
-const COLORS = {
+export const COLORS = {
   ground: 0xe9e6de,
   building: 0xf5f2ec,
   water: 0x8fc3dd,
@@ -25,8 +26,20 @@ const GREEN_COLORS: Record<string, number> = {
 
 const MAJOR_ROADS = new Set(["motorway", "trunk", "primary", "secondary", "tertiary"]);
 
-/** scene 二维坐标 (东, 北) → Shape 顶点。Shape 在 XY 平面，之后 rotateX(-PI/2)
- *  把形状面朝上并保持 x=东、世界 z=-北。 */
+/** 稳定伪随机（同一楼栋每次加载颜色一致）；id 可能是 "123-2" 这类字符串 */
+function hash01(id: number | string): number {
+  let n: number;
+  if (typeof id === "number" && Number.isFinite(id)) {
+    n = id;
+  } else {
+    n = 0;
+    for (const ch of String(id)) n = (n * 31 + ch.charCodeAt(0)) | 0;
+    n = Math.abs(n);
+  }
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 function shapeFromRings(outer: [number, number][], holes: [number, number][][]): THREE.Shape {
   const shape = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
   for (const hole of holes) {
@@ -40,14 +53,25 @@ export function buildGround(scene: THREE.Scene): void {
   geo.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(
     geo,
-    new THREE.MeshLambertMaterial({ color: COLORS.ground, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }),
+    new THREE.MeshLambertMaterial({
+      color: COLORS.ground,
+      polygonOffset: true,
+      polygonOffsetFactor: 2,
+      polygonOffsetUnits: 2,
+    }),
   );
   mesh.position.y = -0.2;
+  mesh.receiveShadow = true;
   scene.add(mesh);
 }
 
-export function buildAreas(scene: THREE.Scene, areas: Area[], colorOf: (a: Area) => number, y: number): void {
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+function buildAreas(scene: THREE.Scene, areas: Area[], colorOf: (a: Area) => number, y: number): void {
+  const mat = new THREE.MeshLambertMaterial({
+    color: 0xffffff,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
   for (const a of areas) {
     for (const outer of a.outers) {
       const shape = shapeFromRings(outer, a.inners);
@@ -69,8 +93,21 @@ export function buildGreen(scene: THREE.Scene, green: Area[]): void {
   buildAreas(scene, green, (a) => GREEN_COLORS[a.kind ?? "park"] ?? COLORS.park, 0.02);
 }
 
-export function buildBuildings(scene: THREE.Scene, buildings: Building[]): void {
-  const mat = new THREE.MeshLambertMaterial({ color: COLORS.building });
+/** bbox 中心（局部坐标）——用作楼栋锚点 */
+export function bboxCenter(pts: [number, number][]): [number, number] {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of pts) {
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  return [(x0 + x1) / 2, (y0 + y1) / 2];
+}
+
+export function buildBuildings(scene: THREE.Scene, buildings: Building[]): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "buildings";
   for (const b of buildings) {
     const shape = shapeFromRings(b.polygon, b.holes);
     const geo = new THREE.ExtrudeGeometry(shape, {
@@ -78,13 +115,30 @@ export function buildBuildings(scene: THREE.Scene, buildings: Building[]): void 
       bevelEnabled: false,
     });
     geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshLambertMaterial({ color: COLORS.building });
+    // 同色系微差异，避免整片死白
+    mat.color.offsetHSL(0, (hash01(b.id) - 0.5) * 0.02, (hash01(String(b.id) + "7") - 0.5) * 0.045);
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.userData = { id: b.id, name: b.name, height: b.height };
-    scene.add(mesh);
+    const [cx, cy] = bboxCenter(b.polygon);
+    mesh.userData = {
+      id: b.id,
+      name: b.name,
+      type: b.type,
+      height: b.height,
+      heightSource: b.heightSource,
+      area: b.area,
+      cx,
+      cy: -cy,
+    };
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
   }
+  scene.add(group);
+  return group;
 }
 
-/** 折线 → 带斜接(Miter)接头的扁平条带，避免路口处出现缺口。 */
+/** 折线 → 带斜接(Miter)接头的扁平条带 */
 function ribbonGeometry(pts: [number, number][], width: number): THREE.BufferGeometry {
   const half = width / 2;
   const positions: number[] = [];
@@ -113,7 +167,6 @@ function ribbonGeometry(pts: [number, number][], width: number): THREE.BufferGeo
       const mlen = Math.hypot(mx, my) || 1;
       mx /= mlen;
       my /= mlen;
-      // 限制斜接长度，避免锐角处出现长刺
       const cosHalf = Math.max(0.4, mx * a2x + my * a2y);
       const scale = Math.min(1 / cosHalf, 2.5);
       nx = mx * scale;
@@ -133,14 +186,18 @@ function ribbonGeometry(pts: [number, number][], width: number): THREE.BufferGeo
   return geo;
 }
 
-export function buildRoads(scene: THREE.Scene, roads: SceneData["roads"]): void {
-  const majorMat = new THREE.MeshLambertMaterial({ color: COLORS.roadMajor });
-  const minorMat = new THREE.MeshLambertMaterial({ color: COLORS.roadMinor });
+/** 全部道路按主/次合并成 2 个网格，把几百个 draw call 压到 2 个 */
+export function buildRoads(scene: THREE.Scene, roads: Road[]): void {
+  const majorGeos: THREE.BufferGeometry[] = [];
+  const minorGeos: THREE.BufferGeometry[] = [];
   roads.forEach((r, idx) => {
     if (r.pts.length < 2) return;
     const geo = ribbonGeometry(r.pts, r.width);
-    const mesh = new THREE.Mesh(geo, MAJOR_ROADS.has(r.kind) ? majorMat : minorMat);
-    mesh.position.y = 0.03 + (idx % 7) * 0.004; // 微小错位，防止共面闪烁
-    scene.add(mesh);
+    geo.translate(0, 0.03 + (idx % 7) * 0.004, 0);
+    (MAJOR_ROADS.has(r.kind) ? majorGeos : minorGeos).push(geo);
   });
+  const majorMat = new THREE.MeshLambertMaterial({ color: COLORS.roadMajor });
+  const minorMat = new THREE.MeshLambertMaterial({ color: COLORS.roadMinor });
+  if (majorGeos.length) scene.add(new THREE.Mesh(mergeGeometries(majorGeos)!, majorMat));
+  if (minorGeos.length) scene.add(new THREE.Mesh(mergeGeometries(minorGeos)!, minorMat));
 }
