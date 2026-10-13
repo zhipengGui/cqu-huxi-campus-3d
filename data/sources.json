@@ -1,0 +1,22 @@
+{
+  "project": "huxi-3d-map",
+  "dataPolicy": "仅本地使用，不公开部署；如日后公开，须保留 ODbL 署名",
+  "sources": [
+    {
+      "name": "OpenStreetMap",
+      "license": "ODbL 1.0",
+      "attribution": "© OpenStreetMap 贡献者",
+      "endpoint": "https://api.openstreetmap.org/api/0.6/map.json",
+      "bbox": [106.281, 29.584, 106.309, 29.606],
+      "snapshot": "data/snapshots/osm_snapshot_2026-10-13.json",
+      "fetchedAt": "2026-10-13",
+      "note": "Overpass 实例当日对本机 IP/全网均不可用，改用 OSM 官方主 API；快照进 git，不重复拉取"
+    },
+    {
+      "name": "参考项目 gxu-campus-3d",
+      "url": "https://github.com/wcqqq1214/gxu-campus-3d",
+      "license": "代码 MIT / 数据 ODbL",
+      "usage": "仅参考其公开文档描述的架构思路（数据快照+管线+Three.js），未复制其代码或数据"
+    }
+  ]
+}
