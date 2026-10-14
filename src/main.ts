@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { SceneData } from "./types";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { SceneData, Building, Gate } from "./types";
 import {
   bboxCenter,
   buildBoundaryLine,
@@ -27,6 +28,92 @@ import { collectPlaces, initPlacesPanel, type PlacesPanel } from "./placesPanel"
 import { DayNight, type PresetName } from "./dayNight";
 import { buildActivity, buildGate, buildLibrary, gateLabel } from "./landmarks";
 import { Navigator } from "./navigation";
+import { facadeTexture, roofMaterial } from "./facades";
+
+const gltfLoader = new GLTFLoader();
+const GLB_LANDMARKS = new Set(["library", "info", "gym", "gongke", "activity"]);
+const GLB_GATES: Record<string, string> = { 北门: "gate_north", 东门: "gate_east", 南门: "gate_south" };
+
+function bboxCenterOfBuilding(b: Building): [number, number] {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of b.polygon) {
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  return [(x0 + x1) / 2, (y0 + y1) / 2];
+}
+
+/** GLB 地标加载；失败返回 null 由调用方回落 */
+function loadLandmarkGLB(asset: string, b: Building): Promise<THREE.Group | null> {
+  return new Promise((resolve) => {
+    if (!GLB_LANDMARKS.has(asset)) return resolve(null);
+    gltfLoader.load(
+      "models/" + asset + ".glb",
+      (gltf) => {
+        const g = gltf.scene;
+        const [cx, cy] = bboxCenterOfBuilding(b);
+        g.position.set(cx, 0, -cy);
+        g.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            const d = mesh.userData;
+            d.id = b.id; d.name = b.name; d.type = b.type;
+            d.style = "library"; d.height = b.height; d.heightSource = b.heightSource;
+            d.area = b.area; d.cx = cx; d.cy = -cy;
+          }
+        });
+        resolve(g);
+      },
+      undefined,
+      () => resolve(null),
+    );
+  });
+}
+
+function loadGateGLB(asset: string, gate: Gate): Promise<THREE.Group | null> {
+  return new Promise((resolve) => {
+    gltfLoader.load(
+      "models/" + asset + ".glb",
+      (gltf) => {
+        const g = gltf.scene;
+        g.position.set(gate.x, 0, -gate.y);
+        const a = (gate.angle * Math.PI) / 180;
+        g.rotation.y = a + Math.PI / 2;
+        g.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh) mesh.castShadow = true;
+        });
+        resolve(g);
+      },
+      undefined,
+      () => resolve(null),
+    );
+  });
+}
+
+/** 无 GLB 时的地标兜底：素色拉伸体 */
+function fallbackLandmark(b: Building): THREE.Group {
+  const g = new THREE.Group();
+  const shape = new THREE.Shape(b.polygon.map(([x, y]) => new THREE.Vector2(x, y)));
+  for (const hole of b.holes) {
+    shape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: Math.max(b.height, 6), bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2);
+  const tex = facadeTexture("teaching", 0).clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(1, Math.max(1, Math.round(b.height / 3.3)));
+  const mesh = new THREE.Mesh(geo, [roofMaterial, new THREE.MeshLambertMaterial({ map: tex })]);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const [cx, cy] = bboxCenterOfBuilding(b);
+  mesh.userData = { id: b.id, name: b.name, type: b.type, style: b.style,
+    height: b.height, heightSource: b.heightSource, area: b.area, cx, cy: -cy };
+  g.add(mesh);
+  return g;
+}
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const statsEl = document.querySelector<HTMLDivElement>("#hud-stats")!;
@@ -145,18 +232,22 @@ async function loadScene(): Promise<void> {
 
   const generic = inside.filter((b) => !b.landmark);
   const buildings = buildBuildings(scene, generic);
-  // 地标精模组挂进同一拾取组（递归射线）
-  for (const b of inside) {
-    if (b.landmark === "library") {
-      buildings.add(buildLibrary(b));
-    } else if (b.landmark === "activity") {
-      buildings.add(buildActivity(b));
-    }
-  }
+  // 地标：优先 Blender GLB（失败回落参数化/素色体）
+  const landmarkDefs = inside.filter((b) => b.landmark);
+  const landmarkGroups = await Promise.all(landmarkDefs.map(async (b) => {
+    const glb = await loadLandmarkGLB(b.landmark, b);
+    if (glb) return glb;
+    if (b.landmark === "library") return buildLibrary(b);
+    if (b.landmark === "activity") return buildActivity(b);
+    return fallbackLandmark(b);
+  }));
+  for (const g of landmarkGroups) buildings.add(g);
   const treeCount = buildTrees(scene, data.green, data.roads, data.water);
 
   for (const g of data.gates) {
-    scene.add(buildGate(g));
+    const asset = GLB_GATES[g.name];
+    const glb = asset ? await loadGateGLB(asset, g) : null;
+    scene.add(glb ?? buildGate(g));
     const lb = gateLabel(g);
     labels.add(lb.text, lb.pos, 3000, { cls: "gate" });
   }
@@ -280,7 +371,10 @@ for (const name of ["day", "dusk", "night"] as PresetName[]) {
   });
 }
 
-renderer.setAnimationLoop(() => {
+let lastFrame = 0;
+renderer.setAnimationLoop((t) => {
+  if (t - lastFrame < 15) return; // 帧率上限 ~60fps，240fps 空转浪费 GPU
+  lastFrame = t;
   controls.update();
   labels.update(camera);
   renderer.render(scene, camera);

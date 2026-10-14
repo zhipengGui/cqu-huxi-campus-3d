@@ -440,10 +440,15 @@ def main():
             landmark = "library"
         elif inside and b["name"] == "学生活动中心":
             landmark = "activity"
-        elif inside and b["tags"].get("leisure") in ("sports_hall", "sports_centre", "stadium") \
+        elif inside and b["tags"].get("leisure") in ("sports_hall", "stadium") \
                 and area > gym_area:
-            gym_pick = b
-            gym_area = area
+            # 必须是紧凑的馆体，不是整个田径场/运动区
+            xs = [p[0] for p in b["outers"][0]]
+            ys = [p[1] for p in b["outers"][0]]
+            diag = math.hypot(max(xs) - min(xs), max(ys) - min(ys))
+            if diag <= 180:
+                gym_pick = b
+                gym_area = area
         out_buildings.append({
             "id": b["id"],
             "name": b["name"] if inside else "",
