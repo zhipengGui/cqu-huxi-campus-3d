@@ -265,6 +265,13 @@
       }
       .map-label { font-size: 11px; padding: 1px 6px; }
     }
+  #osm-credit {
+    position: fixed; right: 10px; bottom: 8px; z-index: 9;
+    font-size: 11px; color: #888; text-decoration: none;
+    background: rgba(255, 255, 255, 0.7); padding: 2px 8px; border-radius: 5px;
+  }
+  body.night #osm-credit { color: #7a8aa5; background: rgba(18, 26, 42, 0.7); }
+  #osm-credit:hover { color: #5a8cc8; }
   </style>
 </head>
 <body>
@@ -358,5 +365,6 @@
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
+  <a id="osm-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap 贡献者</a>
 </body>
 </html>
