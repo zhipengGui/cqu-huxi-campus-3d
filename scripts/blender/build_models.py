@@ -82,9 +82,60 @@ def cyl(name, r, depth, x, y, z, material, rx=0.0, verts=16):
     return o
 
 
+def triangulate_ring(pts):
+    """耳切三角剖分（CCW 环，支持凹多边形），返回索引三元组列表。"""
+    idx = list(range(len(pts)))
+    tris = []
+    guard = 0
+    while len(idx) > 2 and guard < 20000:
+        guard += 1
+        n = len(idx)
+        clipped = False
+        for i in range(n):
+            a, b, c = idx[(i - 1) % n], idx[i], idx[(i + 1) % n]
+            ax, ay = pts[a]
+            bx, by = pts[b]
+            cx, cy = pts[c]
+            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+            if cross <= 1e-9:
+                continue
+            ok = True
+            for j in idx:
+                if j in (a, b, c):
+                    continue
+                px, py = pts[j]
+                d1 = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+                d2 = (cx - bx) * (py - by) - (cy - by) * (px - bx)
+                d3 = (ax - cx) * (py - cy) - (ay - cy) * (px - cx)
+                if d1 >= -1e-9 and d2 >= -1e-9 and d3 >= -1e-9:
+                    ok = False
+                    break
+            if ok:
+                tris.append((a, b, c))
+                idx.remove(b)
+                clipped = True
+                break
+        if not clipped:
+            break
+    return tris
+
+
 def extrude_polygon(pts, h, name, material, holes=None):
-    """Solid from closed polygon (list[(x,y)]), walls + top, origin at z=0."""
+    """Solid from closed polygon (list[(x,y)]), walls + top, origin at z=0.
+    统一归一化为 CCW，保证顶面法线朝上（否则渲染黑面）。"""
     holes = holes or []
+
+    def signed_area(ring):
+        a = 0.0
+        for i in range(len(ring)):
+            x1, y1 = ring[i]
+            x2, y2 = ring[(i + 1) % len(ring)]
+            a += x1 * y2 - x2 * y1
+        return a
+
+    if signed_area(pts) < 0:
+        pts = pts[::-1]
+    holes = [r[::-1] if signed_area(r) > 0 else r for r in holes]
     verts = [(p[0], p[1], 0.0) for p in pts]
     top_start = len(verts)
     verts += [(p[0], p[1], h) for p in pts]
@@ -93,15 +144,13 @@ def extrude_polygon(pts, h, name, material, holes=None):
     for i in range(n):  # walls (two triangles)
         j = (i + 1) % n
         faces.append([i, j, top_start + j, top_start + i])
-    # top (n-gon), plus hole rings -> simple n-gon with hole faces skipped for v1
-    faces.append(list(range(top_start, top_start + n)))
+    # top：耳切三角剖分（凹多边形安全）
+    for (a, b, c) in triangulate_ring(pts):
+        faces.append([top_start + a, top_start + b, top_start + c])
     for ring in holes:
-        hs = len(verts)
-        verts += [(p[0], p[1], h) for p in ring]
-        m = len(ring)
-        for i in range(m):
-            j = (i + 1) % m
-            faces.append([hs + i, hs + j, top_start + j, top_start + i])
+        # 洞环侧壁：只有顶面高度时会生成零高度退化面（渲染黑斑），故不生成；
+        # 洞区由屋顶覆盖（地图视角影响可忽略）
+        pass
     me = bpy.data.meshes.new(name)
     me.from_pydata(verts, [], faces)
     me.validate()
