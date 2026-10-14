@@ -388,8 +388,11 @@ def main():
         return best
 
     gates = []
+    # 真三门：北门/东门/西门（用户作为在校学生确认：学校没有南门；
+    # 西门在松园一栋与七栋之间，即西侧 barrier=gate 节点）
     for name, (ref_lon, ref_lat) in (("北门", (106.3003, 29.6011)),
-                                     ("东门", (106.3027, 29.5969))):
+                                     ("东门", (106.3027, 29.5969)),
+                                     ("西门", (106.2889, 29.5984))):
         best = None
         for xy in gate_barrier:
             rxy = proj.xy(ref_lon, ref_lat)
@@ -400,19 +403,6 @@ def main():
         ang = road_angle_at(*xy)
         gates.append({"id": "gate-" + name, "x": xy[0], "y": xy[1],
                       "angle": round(ang[1], 1) if ang else 0.0, "name": name})
-
-    if boundary:
-        p_s = min(boundary, key=lambda p: p[1])
-        best = None
-        for r in roads:
-            for p in r["pts"]:
-                d = math.hypot(p[0] - p_s[0], p[1] - p_s[1])
-                if d < 220 and (best is None or d < best[0]):
-                    best = (d, p)
-        gx, gy = best[1] if best else p_s
-        ang = road_angle_at(gx, gy)
-        gates.append({"id": "gate-南门", "x": gx, "y": gy,
-                      "angle": round(ang[1], 1) if ang else 0.0, "name": "南门"})
 
     # -- heights / styles ---------------------------------------------------
     out_buildings = []

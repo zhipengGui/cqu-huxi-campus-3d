@@ -32,7 +32,7 @@ import { facadeTexture, roofMaterial } from "./facades";
 
 const gltfLoader = new GLTFLoader();
 const GLB_LANDMARKS = new Set(["library", "info", "gym", "gongke", "activity"]);
-const GLB_GATES: Record<string, string> = { 北门: "gate_north", 东门: "gate_east", 南门: "gate_south" };
+const GLB_GATES: Record<string, string> = { 北门: "gate_north", 东门: "gate_east", 西门: "gate_south" };
 
 function bboxCenterOfBuilding(b: Building): [number, number] {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -119,7 +119,7 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 const statsEl = document.querySelector<HTMLDivElement>("#hud-stats")!;
 const navStatusEl = document.querySelector<HTMLDivElement>("#nav-status")!;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;

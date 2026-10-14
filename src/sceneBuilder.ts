@@ -429,14 +429,14 @@ export function buildRoads(scene: THREE.Scene, roads: Road[]): void {
       return;
     }
     const sw = ribbonGeometry(r.pts, r.width + 3);
-    sw.translate(0, 0.024, 0);
+    sw.translate(0, 0.02, 0);
     sidewalkGeos.push(sw);
     const g = ribbonGeometry(r.pts, r.width);
-    g.translate(0, 0.034 + (idx % 5) * 0.002, 0);
+    g.translate(0, 0.06 + (idx % 5) * 0.004, 0);
     asphaltGeos.push(g);
     if (cls === "major" || (cls === "campus" && r.width >= 5)) {
       const d = dashGeometry(r.pts, 3, 5, 0.35);
-      d.translate(0, 0.046, 0);
+      d.translate(0, 0.14, 0); // 与沥青拉开 8cm，防拉高后深度冲突闪动
       const idx = d.getIndex();
       if (idx && idx.count > 0) dashGeos.push(d);
     }
