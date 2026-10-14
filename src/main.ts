@@ -25,6 +25,7 @@ import { buildActivity, buildGate, buildLibrary, gateLabel } from "./landmarks";
 import { Navigator } from "./navigation";
 import { collectPlaces, initPlacesPanel, type PlaceEntry, type PlacesPanel } from "./placesPanel";
 import { PLACE_INFO } from "./placesInfo";
+import { TOUR_STOPS } from "./tourStops";
 import { facadeTexture, roofMaterial } from "./facades";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -304,6 +305,9 @@ async function loadScene(): Promise<void> {
     if (!byName.has(d.name)) byName.set(d.name, mesh);
   });
   places = collectPlaces(data, byName);
+  tourStops = TOUR_STOPS.map((s) => places.find((p) => p.name === s.name)).filter(
+    (p): p is PlaceEntry => !!p,
+  );
   panel = initPlacesPanel(document.querySelector("#places")!, places, selectPlace);
   initSearch(
     document.querySelector<HTMLInputElement>("#search")!,
@@ -361,7 +365,7 @@ async function loadScene(): Promise<void> {
     `楼栋 ${data.buildings.length} · 树木 ${treeCount}（示意） · ` +
     `数据 © OpenStreetMap 贡献者`;
   document.querySelector("#hud-count")!.textContent = `地点 ${places.length} 处`;
-  document.querySelector("#tour-count")!.textContent = `${places.length} 个地点`;
+  document.querySelector("#tour-count")!.textContent = `游览 ${tourStops.length} 站`;
 }
 
 loadScene().then(() => {
@@ -482,20 +486,23 @@ function renderLighting(): void {
 // ---- 巡游 ----
 const TOUR_DWELL = 4200;
 const tour = { on: false, paused: false, index: 0, timer: 0 as unknown as ReturnType<typeof setTimeout> };
+let tourStops: PlaceEntry[] = [];
 
 function tourBarText(): void {
-  const it = places[tour.index];
+  const it = tourStops[tour.index];
+  const stop = it ? TOUR_STOPS.find((s) => s.name === it.name) : undefined;
   document.querySelector("#tour-state")!.textContent = tour.paused ? "游览已暂停" : "正在游览";
   document.querySelector("#tour-pos")!.textContent =
-    `${String(tour.index + 1).padStart(2, "0")} / ${places.length}`;
+    `${String(tour.index + 1).padStart(2, "0")} / ${tourStops.length}`;
   document.querySelector("#tour-name")!.textContent = it ? it.name : "";
+  document.querySelector("#tour-desc")!.textContent = stop?.note ?? "";
   document.querySelector("#tour-pause")!.textContent = tour.paused ? "继续" : "暂停";
 }
 
 function tourGoto(index: number): void {
-  if (!places.length) return;
-  tour.index = ((index % places.length) + places.length) % places.length;
-  const it = places[tour.index];
+  if (!tourStops.length) return;
+  tour.index = ((index % tourStops.length) + tourStops.length) % tourStops.length;
+  const it = tourStops[tour.index];
   selectPlace(it);
   tourBarText();
   startTourTimer();
