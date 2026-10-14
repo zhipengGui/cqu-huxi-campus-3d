@@ -2,7 +2,7 @@
 
 重庆大学虎溪校区的可旋转三维交互地图，使用 Three.js + Blender 制作，基于 OpenStreetMap 数据建模，对标 [gxu-campus-3d](https://github.com/wcqqq1214/gxu-campus-3d) 风格。
 
-**在线游览：<https://zhipengGui.github.io/cqu-huxi-campus-3d/>**
+**在线游览：<https://zhipenggui.github.io/cqu-huxi-campus-3d/>**
 
 数据来自 OpenStreetMap（© OpenStreetMap 贡献者，ODbL）。
 
