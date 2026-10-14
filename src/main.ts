@@ -20,7 +20,8 @@ import {
   type InfoCardEls,
   type BuildingUserData,
 } from "./interact";
-import { buildingSearchItem, initSearch, type SearchItem } from "./search";
+import { initSearch, type SearchItem } from "./search";
+import { collectPlaces, initPlacesPanel, type PlacesPanel } from "./placesPanel";
 import { DayNight, type PresetName } from "./dayNight";
 import { buildActivity, buildGate, buildLibrary, gateLabel } from "./landmarks";
 import { Navigator } from "./navigation";
@@ -177,53 +178,36 @@ async function loadScene(): Promise<void> {
     },
   });
 
-  // 搜索条目：有名字的楼 + 湖
-  const items: SearchItem[] = [];
+  // 地点收集：有名字的楼（同名取第一个 mesh）+ 湖 + 校门，搜索与列表共用
   const byName = new Map<string, THREE.Mesh>();
   for (const mesh of buildings.children as THREE.Mesh[]) {
     const d = mesh.userData as BuildingUserData;
     if (!d.name || d.name.includes("门")) continue;
     if (!byName.has(d.name)) byName.set(d.name, mesh);
-    items.push(buildingSearchItem(mesh));
   }
-  for (const w of data.water) {
-    if (!w.name) continue;
-    const [cx, cy] = bboxCenter(w.outers[0]);
-    let r = 0;
-    for (const [x, y] of w.outers[0]) r = Math.max(r, Math.hypot(x - cx, y - cy));
-    items.push({
-      name: w.name,
-      kind: "water",
-      target: new THREE.Vector3(cx, 0, -cy),
-      distance: Math.max(260, r * 2.6),
-    });
-  }
-  for (const g of data.gates) {
-    items.push({
-      name: g.name,
-      kind: "gate",
-      target: new THREE.Vector3(g.x, 0, -g.y),
-      distance: 320,
-    });
-  }
+  const places = collectPlaces(data, byName);
+  let panel: PlacesPanel | null = null;
+  const selectPlace = (it: SearchItem): void => {
+    if (navMode && navigator) {
+      navigator.setEndBuilding(it.target.x, it.target.z);
+      flyTo(camera, controls, it.target, it.distance);
+      return;
+    }
+    if (it.mesh) {
+      picker!.select(it.mesh);
+      focusBuilding(it.mesh);
+    } else {
+      picker!.clearSelection();
+      flyTo(camera, controls, it.target, it.distance);
+    }
+    panel?.setActive(it.name);
+  };
+  panel = initPlacesPanel(document.querySelector("#places")!, places, selectPlace);
   initSearch(
     document.querySelector<HTMLInputElement>("#search")!,
     document.querySelector<HTMLElement>("#suggestions")!,
-    items,
-    (it) => {
-      if (navMode && navigator) {
-        navigator.setEndBuilding(it.target.x, it.target.z);
-        flyTo(camera, controls, it.target, it.distance);
-        return;
-      }
-      if (it.mesh) {
-        picker!.select(it.mesh);
-        focusBuilding(it.mesh);
-      } else {
-        picker!.clearSelection();
-        flyTo(camera, controls, it.target, it.distance);
-      }
-    },
+    places,
+    selectPlace,
   );
 
   // 标注：楼名（楼顶）+ 湖名
@@ -243,10 +227,10 @@ async function loadScene(): Promise<void> {
     });
   }
 
-  const named = byName.size;
   statsEl.textContent =
-    `楼栋 ${data.buildings.length}（有名字 ${named}）· 树木 ${treeCount}（示意） · ` +
+    `楼栋 ${data.buildings.length} · 树木 ${treeCount}（示意） · ` +
     `数据 © OpenStreetMap 贡献者`;
+  document.querySelector("#hud-count")!.textContent = `地点 ${places.length} 处`;
 }
 
 loadScene().catch((e: unknown) => {
@@ -255,6 +239,10 @@ loadScene().catch((e: unknown) => {
 });
 
 // ---- 工具栏 ----
+document.querySelector<HTMLButtonElement>("#hud-fold")!.addEventListener("click", () => {
+  document.querySelector("#hud")!.classList.toggle("collapsed");
+});
+
 document.querySelector<HTMLButtonElement>("#tb-labels")!.addEventListener("click", (e) => {
   const btn = e.currentTarget as HTMLButtonElement;
   labels.enabled = !labels.enabled;

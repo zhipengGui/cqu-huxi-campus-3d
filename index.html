@@ -28,14 +28,64 @@
     #hud {
       position: fixed; top: 12px; left: 12px; z-index: 10;
       background: var(--panel-bg); backdrop-filter: blur(8px);
-      border-radius: 12px; padding: 12px 14px; width: 272px;
+      border-radius: 12px; width: 272px;
       box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
       font-size: 13px; line-height: 1.6;
+      display: flex; flex-direction: column;
+      max-height: calc(100vh - 24px);
     }
-    #hud .title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+    #hud-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 11px 14px 9px;
+    }
+    #hud-head .title { font-weight: 700; font-size: 15px; flex: 1; }
+    #hud-fold {
+      border: none; background: rgba(127, 127, 127, 0.1); color: var(--muted);
+      width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    }
+    #hud.collapsed #hud-fold { transform: rotate(-90deg); }
+    #hud.collapsed #hud-body { display: none; }
+    #hud-body {
+      display: flex; flex-direction: column; min-height: 0;
+      padding: 0 14px 11px;
+    }
     #hud .muted { color: var(--muted); font-size: 12px; }
     #hud .err { color: #d24a4a; }
-    #hud-stats { margin-top: 8px; }
+    #hud-stats { margin-top: 8px; flex: none; }
+
+    #places {
+      flex: 1 1 auto; min-height: 120px; overflow-y: auto;
+      margin: 8px -6px 0; padding: 0 6px;
+      scrollbar-width: thin;
+    }
+    #places::-webkit-scrollbar { width: 6px; }
+    #places::-webkit-scrollbar-thumb { background: rgba(127, 127, 127, 0.3); border-radius: 3px; }
+    .place-group { border-bottom: 1px solid var(--line); }
+    .place-group:last-child { border-bottom: none; }
+    .pg-head {
+      display: flex; width: 100%; align-items: center; justify-content: space-between;
+      padding: 7px 4px; border: none; background: none; cursor: pointer;
+      font-size: 12px; font-weight: 700; color: var(--text); text-align: left;
+    }
+    .pg-head .cnt { color: var(--muted); font-weight: 400; }
+    .pg-head::after { content: "▾"; color: var(--muted); font-size: 10px; margin-left: 6px; }
+    .place-group.folded .pg-head::after { content: "▸"; }
+    .place-group.folded .pg-body { display: none; }
+    .pg-body { padding-bottom: 4px; }
+    .place {
+      display: flex; width: 100%; align-items: center; gap: 8px;
+      padding: 6px 8px; border: none; border-radius: 7px; background: none;
+      color: var(--text); font-size: 13px; cursor: pointer; text-align: left;
+    }
+    .place:hover { background: rgba(127, 160, 200, 0.15); }
+    .place.active { background: rgba(90, 140, 200, 0.28); }
+    .place .num { color: var(--muted); font-size: 12px; width: 20px; flex: none; }
+    .place .nm { flex: 1; }
+    .place .badge {
+      flex: none; font-size: 11px; padding: 0 5px; border-radius: 4px;
+      background: rgba(127, 160, 200, 0.25); color: var(--text);
+    }
+    .place .chev { color: var(--muted); flex: none; }
 
     #search-wrap { position: relative; margin: 8px 0 2px; }
     #search {
@@ -116,8 +166,10 @@
     .map-label:hover { background: rgba(255, 220, 140, 0.95); color: #333; }
 
     @media (max-width: 640px) {
-      #hud { width: auto; right: 12px; padding: 10px 12px; }
-      #hud .title { font-size: 14px; margin-bottom: 4px; }
+      #hud { width: auto; right: 12px; max-height: 62vh; }
+      #hud-head { padding: 9px 12px 7px; }
+      #hud-body { padding: 0 12px 9px; }
+      #hud .title { font-size: 14px; }
       .hint { display: none; }
       #info-card {
         top: auto; bottom: 12px; left: 12px; right: 12px; width: auto;
@@ -129,24 +181,31 @@
 <body>
   <div id="app"></div>
   <div id="hud">
-    <div class="title">重庆大学虎溪校区 · 3D 地图</div>
-    <div id="search-wrap">
-      <input id="search" placeholder="搜索楼栋 / 湖泊，如：图书馆、缙湖" autocomplete="off" />
-      <div id="suggestions"></div>
+    <div id="hud-head">
+      <span class="title">校园浏览</span>
+      <span id="hud-count" class="muted"></span>
+      <button id="hud-fold" type="button" title="收起/展开">▾</button>
     </div>
-    <div id="hud-stats" class="muted">正在加载场景数据…</div>
-    <div id="toolbar">
-      <div class="seg">
-        <button id="tb-labels" class="tb on" type="button">标注</button>
-        <button id="tb-nav" class="tb" type="button">导航</button>
+    <div id="hud-body">
+      <div id="search-wrap">
+        <input id="search" placeholder="搜索楼栋 / 湖泊 / 校门" autocomplete="off" />
+        <div id="suggestions"></div>
       </div>
-      <div class="seg">
-        <button id="preset-day" class="tb on" type="button">昼</button>
-        <button id="preset-dusk" class="tb" type="button">昏</button>
-        <button id="preset-night" class="tb" type="button">夜</button>
+      <div id="toolbar">
+        <div class="seg">
+          <button id="tb-labels" class="tb on" type="button">标注</button>
+          <button id="tb-nav" class="tb" type="button">导航</button>
+        </div>
+        <div class="seg">
+          <button id="preset-day" class="tb on" type="button">昼</button>
+          <button id="preset-dusk" class="tb" type="button">昏</button>
+          <button id="preset-night" class="tb" type="button">夜</button>
+        </div>
       </div>
+      <div id="places"></div>
+      <div id="hud-stats" class="muted">正在加载场景数据…</div>
+      <div class="muted hint">左键旋转 · 滚轮缩放 · 右键平移 · 点楼看信息</div>
     </div>
-    <div class="muted hint">左键旋转 · 滚轮缩放 · 右键平移 · 点楼看信息</div>
   </div>
   <div id="nav-panel">
     <div id="nav-status">点击道路或地面设置起点</div>
