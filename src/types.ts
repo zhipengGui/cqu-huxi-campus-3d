@@ -12,9 +12,10 @@ export interface SceneMeta {
 export interface Building {
   id: number | string;
   name: string;
+  inside: boolean;
   type: string;
   style: string;
-  landmark: string; // "" | "library" | "activity"
+  landmark: string; // "" | "library" | "activity" | "gym"
   height: number;
   heightSource: "tag:height" | "tag:levels" | "default" | "override";
   area: number;
@@ -35,8 +36,14 @@ export interface Area {
   name: string;
   kind?: string;
   sport?: string;
+  inside?: boolean;
   outers: [number, number][][];
   inners: [number, number][][];
+}
+
+export interface Boundary {
+  id: number;
+  pts: [number, number][];
 }
 
 export interface Gate {
@@ -54,6 +61,7 @@ export interface RoadGraph {
 
 export interface SceneData {
   meta: SceneMeta;
+  boundary: Boundary | null;
   buildings: Building[];
   roads: Road[];
   water: Area[];

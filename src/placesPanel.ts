@@ -55,7 +55,7 @@ export function collectPlaces(
     });
   }
   for (const w of data.water) {
-    if (!w.name) continue;
+    if (!w.name || w.inside === false) continue;
     const [cx, cy] = bboxCenter(w.outers[0]);
     let r = 0;
     for (const [x, y] of w.outers[0]) r = Math.max(r, Math.hypot(x - cx, y - cy));

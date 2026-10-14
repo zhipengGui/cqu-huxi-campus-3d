@@ -3,7 +3,9 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { SceneData } from "./types";
 import {
   bboxCenter,
+  buildBoundaryLine,
   buildBuildings,
+  buildContextBuildings,
   buildGreen,
   buildGround,
   buildPaving,
@@ -136,10 +138,15 @@ async function loadScene(): Promise<void> {
   buildWater(scene, data.water);
   buildRoads(scene, data.roads);
 
-  const generic = data.buildings.filter((b) => !b.landmark);
+  const inside = data.buildings.filter((b) => b.inside);
+  const outside = data.buildings.filter((b) => !b.inside);
+  buildContextBuildings(scene, outside);
+  if (data.boundary) buildBoundaryLine(scene, data.boundary);
+
+  const generic = inside.filter((b) => !b.landmark);
   const buildings = buildBuildings(scene, generic);
   // 地标精模组挂进同一拾取组（递归射线）
-  for (const b of data.buildings) {
+  for (const b of inside) {
     if (b.landmark === "library") {
       buildings.add(buildLibrary(b));
     } else if (b.landmark === "activity") {

@@ -21,6 +21,7 @@ OVERRIDES_PATH = os.path.join(ROOT, "data", "height_overrides.json")
 OUT_PATH = os.path.join(ROOT, "public", "data", "scene.json")
 
 LEVEL_HEIGHT = 3.3  # metres per storey when estimating from levels/area
+BORDER_WAY = 239537195  # OSM "重庆大学虎溪校区" amenity=university boundary
 
 ROAD_WIDTHS = {
     "motorway": 15, "trunk": 15, "primary": 14, "secondary": 12,
@@ -114,6 +115,17 @@ def parse_height(tags):
 
 DORM_HINTS = ("宿舍", "公寓", "园#", "园一栋", "园二栋", "园三栋", "园四栋",
               "园五栋", "园六栋", "园七栋", "园八栋")
+
+
+def point_in_poly(x, y, poly):
+    c = False
+    n = len(poly)
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+            c = not c
+    return c
 
 
 def classify_style(name, tags):
@@ -212,6 +224,28 @@ def main():
             ways[el["id"]] = el
         elif el["type"] == "relation":
             relations.append(el)
+
+    # 校区边界（本地米制坐标）
+    def ensure_ccw(pts):
+        a = 0
+        for i in range(len(pts)):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % len(pts)]
+            a += x1 * y2 - x2 * y1
+        return pts if a >= 0 else pts[::-1]
+
+    def in_campus(pts):
+        if not boundary or not pts:
+            return False
+        cx = sum(p[0] for p in pts) / len(pts)
+        cy = sum(p[1] for p in pts) / len(pts)
+        return point_in_poly(cx, cy, boundary)
+
+    boundary = None
+    bw = ways.get(BORDER_WAY)
+    if bw:
+        boundary = ensure_ccw([proj.xy(nodes[n]["lon"], nodes[n]["lat"])
+                               for n in bw["nodes"] if n in nodes])
 
     def ring_coords(node_ids):
         pts = []
@@ -314,7 +348,8 @@ def main():
                 if hpts and len(hpts) >= 3:
                     holes.append(hpts)
             item = {"id": r["id"] if i == 0 else "%s-%d" % (r["id"], i + 1),
-                    "name": name, "tags": tags, "outers": [pts], "inners": holes}
+                    "name": name, "tags": tags, "outers": [pts], "inners": holes,
+                    "_inside_hint": in_campus([pts[0]])}
             if tags.get("natural") == "water":
                 water.append(item)
             else:
@@ -326,20 +361,17 @@ def main():
         if tags.get("natural") == "tree":
             trees.append(proj.xy(nd["lon"], nd["lat"]))
 
-    # -- gates: barrier nodes + orientation from nearest road --------------
-    gate_nodes = []
+    # -- gates: 真三门（北门/东门/南门）-------------------------------------
+    # 北门/东门取 OSM barrier=gate 节点（与公开资料坐标匹配）；南门无点位，
+    # 用校界最南点最近的道路位置推导。
+    gate_barrier = []
     for nid_, nd in nodes.items():
         tags = nd.get("tags", {})
         if tags.get("barrier") in ("gate", "lift_gate"):
-            gate_nodes.append(proj.xy(nd["lon"], nd["lat"]))
-    gates = []
-    for i, (gx, gy) in enumerate(gate_nodes):
-        # 只保留校区边缘的闸门（过远的其实是大学城公路闸口）
-        if gx * gx + gy * gy > 950 ** 2:
-            continue
-        if any(math.hypot(gx - k["x"], gy - k["y"]) < 180 for k in gates):
-            continue
-        best = None  # (dist, angle)
+            gate_barrier.append(proj.xy(nd["lon"], nd["lat"]))
+
+    def road_angle_at(x, y):
+        best = None
         for r in roads:
             for j in range(len(r["pts"]) - 1):
                 x1, y1 = r["pts"][j]
@@ -348,31 +380,47 @@ def main():
                 len2 = dx * dx + dy * dy
                 if not len2:
                     continue
-                t = max(0.0, min(1.0, ((gx - x1) * dx + (gy - y1) * dy) / len2))
+                t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / len2))
                 px, py = x1 + t * dx, y1 + t * dy
-                d = math.hypot(gx - px, gy - py)
+                d = math.hypot(x - px, y - py)
                 if best is None or d < best[0]:
-                    ang = math.degrees(math.atan2(dy, dx))
-                    best = (d, ang)
-        if best is None or best[0] > 80:
-            continue
-        # 按相对校区中心的方位命名
-        if abs(gx) >= abs(gy):
-            name = "东门" if gx > 0 else "西门"
-        else:
-            name = "北门" if gy > 0 else "南门"
-        if any(k["name"] == name for k in gates):
-            n = 2
-            while any(k["name"] == "%s%d" % (name, n) for k in gates):
-                n += 1
-            name = "%s%d" % (name, n)
-        gates.append({"id": "gate-%d" % (i + 1), "x": gx, "y": gy,
-                      "angle": round(best[1], 1), "name": name})
+                    best = (d, math.degrees(math.atan2(dy, dx)))
+        return best
+
+    gates = []
+    for name, (ref_lon, ref_lat) in (("北门", (106.3003, 29.6011)),
+                                     ("东门", (106.3027, 29.5969))):
+        best = None
+        for xy in gate_barrier:
+            rxy = proj.xy(ref_lon, ref_lat)
+            d = math.hypot(xy[0] - rxy[0], xy[1] - rxy[1])
+            if d < 400 and (best is None or d < best[0]):
+                best = (d, xy)
+        xy = best[1] if best else proj.xy(ref_lon, ref_lat)
+        ang = road_angle_at(*xy)
+        gates.append({"id": "gate-" + name, "x": xy[0], "y": xy[1],
+                      "angle": round(ang[1], 1) if ang else 0.0, "name": name})
+
+    if boundary:
+        p_s = min(boundary, key=lambda p: p[1])
+        best = None
+        for r in roads:
+            for p in r["pts"]:
+                d = math.hypot(p[0] - p_s[0], p[1] - p_s[1])
+                if d < 220 and (best is None or d < best[0]):
+                    best = (d, p)
+        gx, gy = best[1] if best else p_s
+        ang = road_angle_at(gx, gy)
+        gates.append({"id": "gate-南门", "x": gx, "y": gy,
+                      "angle": round(ang[1], 1) if ang else 0.0, "name": "南门"})
 
     # -- heights / styles ---------------------------------------------------
     out_buildings = []
+    gym_pick = None
+    gym_area = 0
     for b in buildings:
         area = sum(shoelace_area(o) for o in b["outers"])
+        inside = in_campus(b["outers"][0])
         h, src = parse_height(b["tags"])
         if h is None:
             h = round(default_levels(area) * LEVEL_HEIGHT, 1)
@@ -388,19 +436,32 @@ def main():
                 h = round(float(ov["height"]), 1)
                 src = "override"
         landmark = ""
-        bc = bbox_center_of(b)
-        if b["name"] == "图书馆" and abs(bc[0]) < 900 and abs(bc[1]) < 900:
+        if inside and b["name"] == "图书馆":
             landmark = "library"
-        elif b["name"] == "学生活动中心" and abs(bc[0]) < 900 and abs(bc[1]) < 900:
+        elif inside and b["name"] == "学生活动中心":
             landmark = "activity"
+        elif inside and b["tags"].get("leisure") in ("sports_hall", "sports_centre", "stadium") \
+                and area > gym_area:
+            gym_pick = b
+            gym_area = area
         out_buildings.append({
-            "id": b["id"], "name": b["name"],
+            "id": b["id"],
+            "name": b["name"] if inside else "",
+            "inside": inside,
             "type": b["tags"].get("building", "yes"),
-            "style": classify_style(b["name"], b["tags"]),
+            "style": classify_style(b["name"], b["tags"]) if inside else "office",
             "landmark": landmark,
             "height": h, "heightSource": src, "area": int(area),
             "polygon": b["outers"][0], "holes": b["inners"]})
     buildings = out_buildings
+    if gym_pick is not None:
+        for ob in buildings:
+            if ob["id"] == gym_pick["id"]:
+                ob["landmark"] = "gym"
+                ob["name"] = "体育馆"
+                ob["style"] = "hall"
+
+    water = [dict(w, inside=in_campus(w["outers"][0])) for w in water]
 
     scene = {
         "meta": {
@@ -411,6 +472,7 @@ def main():
             "generatedAt": datetime.datetime.now().isoformat(timespec="seconds"),
             "note": "coordinates: X=east metres, Y=north metres from origin",
         },
+        "boundary": {"id": BORDER_WAY, "pts": boundary} if boundary else None,
         "buildings": buildings,
         "roads": roads,
         "water": water,
