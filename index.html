@@ -129,13 +129,102 @@
     .map-label.gate { color: #2e7d43; background: rgba(232, 246, 236, 0.9); }
     body.night .map-label.gate { color: #8fd6a5; background: rgba(16, 42, 28, 0.85); }
 
-    #toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+    #toolbar { display: flex; align-items: center; margin-top: 10px; }
     .tb {
       padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px;
       background: rgba(127, 127, 127, 0.08); color: var(--muted); font-size: 12px; cursor: pointer;
     }
     .tb.on { color: var(--text); background: rgba(90, 140, 200, 0.22); border-color: rgba(90, 140, 200, 0.5); }
     .seg { display: flex; gap: 4px; }
+
+    #hud-tabs { display: flex; gap: 2px; margin-bottom: 8px; border-bottom: 1px solid var(--line); flex: none; }
+    .hud-tab {
+      flex: 1; padding: 7px 0 6px; border: none; background: none; color: var(--muted);
+      font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent;
+    }
+    .hud-tab.on { color: var(--text); font-weight: 700; border-bottom-color: #5a8cc8; }
+    .tab-page { display: none; }
+    .tab-page.on { display: block; }
+    #tab-places.on { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 140px; }
+    #tab-layers.on, #tab-lighting.on { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+    .layer-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 9px 2px; border-bottom: 1px solid var(--line);
+    }
+    .layer-row .lt strong { display: block; font-size: 13px; font-weight: 600; }
+    .layer-row .lt small { color: var(--muted); font-size: 11px; }
+    .sw { position: relative; width: 34px; height: 20px; flex: none; }
+    .sw input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; position: absolute; z-index: 2; }
+    .sw i { position: absolute; inset: 0; background: rgba(127, 127, 127, 0.35); border-radius: 10px; transition: 0.15s; }
+    .sw i::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .sw input:checked + i { background: #5a8cc8; }
+    .sw input:checked + i::after { left: 16px; }
+
+    #lighting-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lt-card {
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+      background: rgba(127, 127, 127, 0.06); cursor: pointer; color: var(--text); text-align: left;
+    }
+    .lt-card.on { border-color: #5a8cc8; background: rgba(90, 140, 200, 0.18); }
+    .lt-card strong { font-size: 13px; display: block; }
+    .lt-card small { color: var(--muted); font-size: 11px; }
+
+    #place-detail { display: none; }
+    #place-detail.open { display: block; }
+    #hud.detail-mode .hud-tabs,
+    #hud.detail-mode .tab-page,
+    #hud.detail-mode #tour-start { display: none; }
+    #hud.detail-mode #place-detail { display: block; }
+    #pd-back { border: none; background: none; color: var(--muted); cursor: pointer; padding: 2px 0 8px; font-size: 12px; }
+    #pd-photo {
+      height: 150px; border-radius: 10px; margin-bottom: 8px;
+      background: rgba(127, 127, 127, 0.15) center/cover no-repeat;
+    }
+    .pd-title { font-size: 16px; font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+    #pd-num { color: var(--muted); font-size: 13px; }
+    #pd-meta { margin: 4px 0 6px; }
+    #pd-desc { font-size: 13px; line-height: 1.7; color: var(--text); margin: 0 0 4px; }
+    #pd-fly {
+      margin-top: 8px; width: 100%; padding: 7px 0; border: 1px solid var(--line); border-radius: 8px;
+      background: rgba(90, 140, 200, 0.2); color: var(--text); cursor: pointer; font-size: 13px;
+    }
+    #pd-fly:hover { background: rgba(90, 140, 200, 0.35); }
+
+    #tools {
+      position: fixed; right: 12px; top: 50%; transform: translateY(-50%); z-index: 10;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    #tools button {
+      width: 42px; height: 42px; border-radius: 10px; border: none;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); font-size: 15px; color: var(--text); cursor: pointer;
+    }
+    #tools button:hover { background: rgba(90, 140, 200, 0.25); }
+
+    #tour-start {
+      display: flex; width: 100%; align-items: center; gap: 8px; margin-top: 10px;
+      padding: 10px 12px; border: none; border-radius: 9px;
+      background: #2f7d4f; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; flex: none;
+    }
+    #tour-start:hover { background: #35905b; }
+    #tour-start .muted { color: rgba(255, 255, 255, 0.75); margin-left: auto; }
+
+    #tour-bar {
+      position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 11;
+      display: none; align-items: center; gap: 10px;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+      border-radius: 12px; padding: 10px 14px; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
+      font-size: 13px; color: var(--text);
+    }
+    #tour-bar.on { display: flex; }
+    #tour-timer { width: 110px; height: 4px; border-radius: 2px; background: rgba(127, 127, 127, 0.3); overflow: hidden; }
+    #tour-timer-fill { display: block; height: 100%; width: 0; background: #2f7d4f; }
+    #tour-bar button {
+      padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px;
+      background: rgba(127, 127, 127, 0.08); color: var(--text); font-size: 12px; cursor: pointer;
+    }
+    #tour-bar button:hover { background: rgba(90, 140, 200, 0.2); }
 
     #info-card {
       position: fixed; top: 12px; right: 12px; z-index: 10; width: 250px;
@@ -187,25 +276,68 @@
       <button id="hud-fold" type="button" title="收起/展开">▾</button>
     </div>
     <div id="hud-body">
-      <div id="search-wrap">
-        <input id="search" placeholder="搜索楼栋 / 湖泊 / 校门" autocomplete="off" />
-        <div id="suggestions"></div>
+      <div id="hud-tabs">
+        <button class="hud-tab on" data-tab="places" type="button">地点</button>
+        <button class="hud-tab" data-tab="layers" type="button">图层</button>
+        <button class="hud-tab" data-tab="lighting" type="button">光影</button>
       </div>
+
+      <div id="tab-places" class="tab-page on">
+        <div id="search-wrap">
+          <input id="search" placeholder="搜索楼栋 / 湖泊 / 校门" autocomplete="off" />
+          <div id="suggestions"></div>
+        </div>
+        <div id="places"></div>
+      </div>
+
+      <div id="tab-layers" class="tab-page">
+        <div id="layers-list"></div>
+      </div>
+
+      <div id="tab-lighting" class="tab-page">
+        <div id="lighting-list"></div>
+      </div>
+
+      <div id="place-detail">
+        <button id="pd-back" type="button">← 返回地点列表</button>
+        <div id="pd-photo"></div>
+        <div class="pd-title">
+          <span id="pd-num"></span>
+          <strong id="pd-name"></strong>
+        </div>
+        <div id="pd-meta" class="muted"></div>
+        <p id="pd-desc"></p>
+        <button id="pd-fly" type="button">前往此处</button>
+      </div>
+
       <div id="toolbar">
-        <div class="seg">
-          <button id="tb-labels" class="tb on" type="button">标注</button>
-          <button id="tb-nav" class="tb" type="button">导航</button>
-        </div>
-        <div class="seg">
-          <button id="preset-day" class="tb on" type="button">昼</button>
-          <button id="preset-dusk" class="tb" type="button">昏</button>
-          <button id="preset-night" class="tb" type="button">夜</button>
-        </div>
+        <button id="tb-nav" class="tb" type="button">导航</button>
       </div>
-      <div id="places"></div>
       <div id="hud-stats" class="muted">正在加载场景数据…</div>
       <div class="muted hint">左键旋转 · 滚轮缩放 · 右键平移 · 点楼看信息</div>
     </div>
+    <button id="tour-start" type="button">
+      ▶ 开始游览 <span id="tour-count" class="muted"></span>
+    </button>
+  </div>
+
+  <div id="tour-bar">
+    <strong id="tour-state">正在游览</strong>
+    <span id="tour-pos">01 / 47</span>
+    <span id="tour-name"></span>
+    <span id="tour-timer"><span id="tour-timer-fill"></span></span>
+    <button id="tour-pause" type="button">暂停</button>
+    <button id="tour-prev" type="button">上一个</button>
+    <button id="tour-next" type="button">下一个</button>
+    <button id="tour-exit" type="button">退出</button>
+  </div>
+
+  <div id="tools">
+    <button id="tl-compass" type="button" title="回正北">N</button>
+    <button id="tl-zin" type="button" title="放大">＋</button>
+    <button id="tl-zout" type="button" title="缩小">－</button>
+    <button id="tl-home" type="button" title="返回全景">⌂</button>
+    <button id="tl-fs" type="button" title="全屏">⛶</button>
   </div>
   <div id="nav-panel">
     <div id="nav-status">点击道路或地面设置起点</div>

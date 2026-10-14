@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 /** 昼/昏/夜三档光照预设。 */
 
-export type PresetName = "day" | "dusk" | "night";
+export type PresetName = "morning" | "day" | "dusk" | "night";
 
 interface Preset {
   bg: number;
@@ -19,6 +19,12 @@ interface Preset {
 }
 
 const PRESETS: Record<PresetName, Preset> = {
+  morning: {
+    bg: 0xe6eef7, fogNear: 2000, fogFar: 4800,
+    hemiSky: 0xccdef5, hemiGround: 0x79836c, hemiInt: 0.9,
+    sunColor: 0xe9f2ff, sunInt: 1.35, sunPos: [-950, 520, 550],
+    shadows: true, emissive: 0x000000,
+  },
   day: {
     bg: 0xdfeaf2, fogNear: 2200, fogFar: 5200,
     hemiSky: 0xcfe5ff, hemiGround: 0xb8b09a, hemiInt: 1.1,

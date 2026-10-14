@@ -61,7 +61,7 @@ const DENSITY: Record<string, number> = { forest: 1 / 450, park: 1 / 900, grass:
 const MAX_PER_AREA = 350;
 const MAX_TOTAL = 1800;
 
-export function buildTrees(scene: THREE.Scene, green: Area[], roads: Road[], water: Area[]): number {
+export function buildTrees(parent: THREE.Object3D, green: Area[], roads: Road[], water: Area[]): number {
   const rng = mulberry32(20261013);
 
   // 道路段与水面多边形的粗筛结构
@@ -130,7 +130,7 @@ export function buildTrees(scene: THREE.Scene, green: Area[], roads: Road[], wat
   });
   crowns.castShadow = true;
   trunks.castShadow = true;
-  scene.add(trunks);
-  scene.add(crowns);
+  parent.add(trunks);
+  parent.add(crowns);
   return positions.length;
 }

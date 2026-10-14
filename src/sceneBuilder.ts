@@ -108,7 +108,7 @@ export function buildGround(scene: THREE.Scene): void {
   scene.add(mesh);
 }
 
-function flatAreaMeshes(geos: THREE.BufferGeometry[], color: number, y: number, scene: THREE.Scene): void {
+function flatAreaMeshes(geos: THREE.BufferGeometry[], color: number, y: number, parent: THREE.Object3D): void {
   if (!geos.length) return;
   const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos)!;
   const mesh = new THREE.Mesh(
@@ -122,26 +122,32 @@ function flatAreaMeshes(geos: THREE.BufferGeometry[], color: number, y: number, 
   );
   mesh.position.y = y;
   mesh.receiveShadow = true;
-  scene.add(mesh);
+  parent.add(mesh);
 }
 
-export function buildGreen(scene: THREE.Scene, green: Area[]): void {
-  const byColor = new Map<number, THREE.BufferGeometry[]>();
+export function buildGreen(greenGroup: THREE.Object3D, sportsGroup: THREE.Object3D, green: Area[]): void {
+  const buckets = new Map<string, { parent: THREE.Object3D; color: number; geos: THREE.BufferGeometry[] }>();
   for (const a of green) {
-    const color = a.kind === "pitch" && a.sport && SPORT_COLORS[a.sport]
-      ? SPORT_COLORS[a.sport]
+    const isSport = a.kind === "pitch" || a.kind === "track" || a.kind === "pool";
+    const parent = isSport ? sportsGroup : greenGroup;
+    const color = isSport && a.sport && SPORT_COLORS[a.sport] ? SPORT_COLORS[a.sport]
+      : a.kind === "track" ? 0xc9735c
+      : a.kind === "pool" ? 0x74b9d8
       : GREEN_COLORS[a.kind ?? "park"] ?? COLORS.park;
+    const key = (isSport ? "s" : "g") + color;
+    if (!buckets.has(key)) buckets.set(key, { parent, color, geos: [] });
     for (const outer of a.outers) {
       const geo = new THREE.ShapeGeometry(shapeFromRings(outer, a.inners));
       geo.rotateX(-Math.PI / 2);
-      if (!byColor.has(color)) byColor.set(color, []);
-      byColor.get(color)!.push(geo);
+      buckets.get(key)!.geos.push(geo);
     }
   }
-  for (const [color, geos] of byColor) flatAreaMeshes(geos, color, 0.02, scene);
+  for (const { parent, color, geos } of buckets.values()) {
+    flatAreaMeshes(geos, color, 0.02, parent);
+  }
 }
 
-export function buildPaving(scene: THREE.Scene, paving: Area[]): void {
+export function buildPaving(parent: THREE.Object3D, paving: Area[]): void {
   const geos: THREE.BufferGeometry[] = [];
   for (const a of paving) {
     for (const outer of a.outers) {
@@ -150,10 +156,10 @@ export function buildPaving(scene: THREE.Scene, paving: Area[]): void {
       geos.push(geo);
     }
   }
-  flatAreaMeshes(geos, COLORS.paving, 0.015, scene);
+  flatAreaMeshes(geos, COLORS.paving, 0.015, parent);
 }
 
-export function buildWater(scene: THREE.Scene, water: Area[]): void {
+export function buildWater(parent: THREE.Object3D, water: Area[]): void {
   const waterGeos: THREE.BufferGeometry[] = [];
   const shoreGeos: THREE.BufferGeometry[] = [];
   for (const a of water) {
@@ -171,8 +177,8 @@ export function buildWater(scene: THREE.Scene, water: Area[]): void {
       shoreGeos.push(sg);
     }
   }
-  flatAreaMeshes(shoreGeos, COLORS.shore, 0.025, scene);
-  flatAreaMeshes(waterGeos, COLORS.water, 0.05, scene);
+  flatAreaMeshes(shoreGeos, COLORS.shore, 0.025, parent);
+  flatAreaMeshes(waterGeos, COLORS.water, 0.05, parent);
 }
 
 export function bboxCenter(pts: [number, number][]): [number, number] {
@@ -187,7 +193,7 @@ export function bboxCenter(pts: [number, number][]): [number, number] {
 }
 
 /** 校外背景楼：合并成单个素色网格（无标注、无拾取，仅作城市背景） */
-export function buildContextBuildings(scene: THREE.Scene, buildings: Building[]): void {
+export function buildContextBuildings(parent: THREE.Object3D, buildings: Building[]): void {
   if (!buildings.length) return;
   const mat = new THREE.MeshLambertMaterial({ color: 0xdedcd6 });
   const geos: THREE.BufferGeometry[] = [];
@@ -203,11 +209,11 @@ export function buildContextBuildings(scene: THREE.Scene, buildings: Building[])
   const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos)!;
   const mesh = new THREE.Mesh(merged, mat);
   mesh.receiveShadow = true;
-  scene.add(mesh);
+  parent.add(mesh);
 }
 
-/** 校区边界白线 */
-export function buildBoundaryLine(scene: THREE.Scene, boundary: { pts: [number, number][] }): void {
+/** 校区边界白线（返回线条对象，由调用方挂载并控制显隐） */
+export function buildBoundaryLine(boundary: { pts: [number, number][] }): THREE.LineLoop {
   const pts = boundary.pts.map(([x, y]) => new THREE.Vector3(x, 0.12, -y));
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
   const line = new THREE.LineLoop(geo, new THREE.LineBasicMaterial({
@@ -216,7 +222,7 @@ export function buildBoundaryLine(scene: THREE.Scene, boundary: { pts: [number, 
     opacity: 0.75,
   }));
   line.renderOrder = 4;
-  scene.add(line);
+  return line;
 }
 
 /** 楼栋：立面纹理 + 女儿墙 + 屋顶设备块。landmark 楼由调用方过滤后另行构建。 */
@@ -413,7 +419,7 @@ function dashGeometry(pts: [number, number][], dashLen: number, gapLen: number, 
 }
 
 /** 道路分级渲染：沥青主路面 + 人行道衬带 + 主要道路中央虚线，全部合批 */
-export function buildRoads(scene: THREE.Scene, roads: Road[]): void {
+export function buildRoads(parent: THREE.Object3D, roads: Road[]): void {
   const sidewalkGeos: THREE.BufferGeometry[] = [];
   const asphaltGeos: THREE.BufferGeometry[] = [];
   const pathGeos: THREE.BufferGeometry[] = [];
@@ -448,14 +454,14 @@ export function buildRoads(scene: THREE.Scene, roads: Road[]): void {
     const mesh = new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ color }));
     mesh.position.y = yOff;
     mesh.receiveShadow = true;
-    scene.add(mesh);
+    parent.add(mesh);
   };
   batch(sidewalkGeos, COLORS.sidewalk, 0);
   batch(asphaltGeos, COLORS.roadAsphalt, 0);
   batch(pathGeos, COLORS.roadPath, 0);
   if (dashGeos.length) {
     const merged = dashGeos.length === 1 ? dashGeos[0] : mergeGeometries(dashGeos)!;
-    scene.add(new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ color: COLORS.roadMark })));
+    parent.add(new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ color: COLORS.roadMark })));
   }
 }
 

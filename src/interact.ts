@@ -112,12 +112,11 @@ export class BuildingPicker {
     }
   }
 
-  /** 搜索等外部入口直接选中某楼 */
+  /** 搜索等外部入口直接选中某楼（只高亮，不触发回调——调用方自理界面） */
   select(mesh: THREE.Mesh): void {
     if (this.selectedMesh) this.restore(this.selectedMesh);
     this.selectedMesh = mesh;
     this.setEmissive(mesh, SELECT_EMISSIVE);
-    this.cb.onSelect(mesh);
   }
 
   clearSelection(): void {
