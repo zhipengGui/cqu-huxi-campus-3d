@@ -1,10 +1,24 @@
 # 重庆大学虎溪校区 3D 地图
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Three.js-000000?style=flat&logo=threedotjs&logoColor=white" alt="Three.js">
+  <img src="https://img.shields.io/badge/Blender-E87D0D?style=flat&logo=blender&logoColor=white" alt="Blender">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License">
+  <img src="https://img.shields.io/badge/Data-OpenStreetMap-387C44?style=flat&logo=openstreetmap&logoColor=white" alt="OpenStreetMap">
+</p>
+
 重庆大学虎溪校区的可旋转三维交互地图，使用 Three.js + Blender 制作，基于 OpenStreetMap 数据建模，对标 [gxu-campus-3d](https://github.com/wcqqq1214/gxu-campus-3d) 风格。
 
-**在线游览：<https://zhipenggui.github.io/cqu-huxi-campus-3d/>**
+**在线游览：<https://zhipenggui.github.io/cqu-huxi-campus-3d/>** · **源码：[zhipengGui/cqu-huxi-campus-3d](https://github.com/zhipengGui/cqu-huxi-campus-3d)**
 
 数据来自 OpenStreetMap（© OpenStreetMap 贡献者，ODbL）。
+
+## 截图
+
+> 待补充：自行截取下方场景，保存到 `docs/screenshots/` 后在 README 引用。
+
+建议截图清单：校园全景俯视、图书馆精模近景、东门门柱广场、步行导航路线、夜景光影、手机端界面。
 
 ## 快速开始
 
