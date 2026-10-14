@@ -51,6 +51,22 @@ def C(hexcolor):
     return (int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255)
 
 
+def glass_mat(name, color):
+    """玻璃材质：透明 + 低粗糙 + 高 IOR，glTF 导出为 transmission 扩展。"""
+    if name in MATS:
+        return MATS[name]
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    bsdf = m.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = (*color, 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.12
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Transmission Weight"].default_value = 0.85
+    bsdf.inputs["IOR"].default_value = 1.45
+    MATS[name] = m
+    return m
+
+
 # ---------------------------------------------------------------- helpers
 
 def clear_scene():
@@ -272,7 +288,7 @@ def asset_library(D):
     objs = []
     red = mat("libred", C("#a8523f"))
     red_dk = mat("libred_dk", C("#8a4036"))
-    glass = mat("libglass", C("#42525e"), 0.3)
+    glass = glass_mat("libglass", C("#42525e"))
     white = mat("white", C("#f4f3ee"))
     # 裙楼（真实轮廓）上段 + 玻璃底座（内收）
     inner = [(px + (cx - px) * 0.965, py + (cy - py) * 0.965)
@@ -339,7 +355,7 @@ def asset_info(D):
     poly, holes = b["polygon"], b["holes"]
     objs = []
     white = mat("infowhite", C("#f0f0ec"))
-    glass = mat("infoglass", C("#54666f"), 0.3)
+    glass = glass_mat("infoglass", C("#54666f"))
     objs.append(extrude_polygon(poly, b["height"], "mass", glass, holes))
     # 楼层横带（白肋）
     floors = max(3, int(b["height"] / 3.9))
@@ -436,7 +452,7 @@ def asset_gym(D):
     objs = []
     brick = mat("brick", C("#9c5a4a"))
     brick_dk = mat("brick_dk", C("#7c4638"))
-    metal = mat("metal", C("#cdd3d8"), 0.55, 0.35)
+    metal = mat("metal", C("#cdd3d8"), 0.4, 0.55)
     base_h = 9
     objs.append(extrude_polygon(poly, base_h, "base", brick, holes))
     # 砖墙深色窗带
@@ -506,7 +522,7 @@ def asset_gongke(D):
     poly, holes = b["polygon"], b["holes"]
     objs = []
     wall = mat("gkwall", C("#ece9e2"))
-    glass = mat("gkglass", C("#3b4754"), 0.35)
+    glass = glass_mat("gkglass", C("#3b4754"))
     white = mat("gkwhite", C("#f6f5f1"))
     h = max(b["height"], 15)
     objs.append(extrude_polygon(poly, h, "mass", wall, holes))
@@ -543,7 +559,7 @@ def asset_activity(D):
     objs = []
     rust = mat("rust", C("#9c4a26"))
     rust_dk = mat("rust_dk", C("#7c3a1e"))
-    glass = mat("acglass", C("#42525e"), 0.3)
+    glass = glass_mat("acglass", C("#42525e"))
     body_h = max(b["height"], 12)
     objs.append(extrude_polygon(poly, 3.8, "base", glass))
     objs.append(extrude_polygon(poly, body_h - 3.8, "body", rust))
