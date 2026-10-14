@@ -658,8 +658,8 @@ def asset_gate_north(D):
     return objs, "gate_north"
 
 
-def asset_gate_south(D):
-    """南门（无实拍，简约现代门：双砼柱 + 白横梁 + 校名 + 侧人行口）。待用户实拍校准。"""
+def asset_gate_west(D):
+    """西门（无实拍，简约现代门：双砼柱 + 白横梁 + 校名 + 侧人行口）。待用户实拍校准。"""
     objs = []
     concrete = mat("concrete", C("#b8b4ac"), 0.95)
     white = mat("sw", C("#efece6"), 0.9)
@@ -673,7 +673,7 @@ def asset_gate_south(D):
     for side in [1, -1]:
         objs.append(box("w", 5, 0.8, 1.5, side * 11.2, 0, 0.75, concrete))
     recenter(objs)
-    return objs, "gate_south"
+    return objs, "gate_west"
 
 
 # ---------------------------------------------------------------- render/export
@@ -746,7 +746,7 @@ def main():
         "activity": lambda: asset_activity(D),
         "gate_east": lambda: asset_gate_east(D),
         "gate_north": lambda: asset_gate_north(D),
-        "gate_south": lambda: asset_gate_south(D),
+        "gate_west": lambda: asset_gate_west(D),
     }
     os.makedirs(OUT_GLB, exist_ok=True)
     os.makedirs(OUT_RENDER, exist_ok=True)

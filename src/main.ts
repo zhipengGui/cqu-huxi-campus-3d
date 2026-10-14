@@ -123,7 +123,7 @@ scene.add(gGreen, gSports, gWater, gRoads, gTrees, gContext);
 // ---- GLB ----
 const gltfLoader = new GLTFLoader();
 const GLB_LANDMARKS = new Set(["library", "info", "gym", "gongke", "activity"]);
-const GLB_GATES: Record<string, string> = { 北门: "gate_north", 东门: "gate_east", 西门: "gate_south" };
+const GLB_GATES: Record<string, string> = { 北门: "gate_north", 东门: "gate_east", 西门: "gate_west" };
 
 function bboxCenterOfBuilding(b: Building): [number, number] {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;

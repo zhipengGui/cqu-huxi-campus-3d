@@ -361,9 +361,9 @@ def main():
         if tags.get("natural") == "tree":
             trees.append(proj.xy(nd["lon"], nd["lat"]))
 
-    # -- gates: 真三门（北门/东门/南门）-------------------------------------
-    # 北门/东门取 OSM barrier=gate 节点（与公开资料坐标匹配）；南门无点位，
-    # 用校界最南点最近的道路位置推导。
+    # -- gates: 真三门（北门/东门/西门）-------------------------------------
+    # 北门/东门/西门均取 OSM barrier=gate 节点；北门/东门与公开资料坐标匹配，
+    # 西门在松园一栋与七栋之间（西侧 barrier=gate 节点）。
     gate_barrier = []
     for nid_, nd in nodes.items():
         tags = nd.get("tags", {})
