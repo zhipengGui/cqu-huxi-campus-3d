@@ -1,7 +1,10 @@
-# 重庆大学虎溪校区 3D 地图（huxi-3d-map）
+# 重庆大学虎溪校区 3D 地图
 
-对标 [gxu-campus-3d](https://github.com/wcqqq1214/gxu-campus-3d) 风格的虎溪校区可旋转三维地图。
-纯本地项目，不公开部署。数据来自 OpenStreetMap（© OpenStreetMap 贡献者，ODbL）。
+重庆大学虎溪校区的可旋转三维交互地图，使用 Three.js + Blender 制作，基于 OpenStreetMap 数据建模，对标 [gxu-campus-3d](https://github.com/wcqqq1214/gxu-campus-3d) 风格。
+
+**在线游览：<https://zhipengGui.github.io/cqu-huxi-campus-3d/>**
+
+数据来自 OpenStreetMap（© OpenStreetMap 贡献者，ODbL）。
 
 ## 快速开始
 
@@ -69,3 +72,7 @@ py scripts/build_scene_data.py  # 快照 → public/data/scene.json（局部米�
 - 体育馆 OSM 轮廓较粗（五边形），且高度为估算
 - 树木为程序化示意分布，非真实绿化图
 - Blender 精模重建命令：`D:\tools\blender-4.5.9-windows-x64\blender.exe -b --python scripts\blender\build_models.py -- --asset all`
+
+## 许可
+
+代码采用 [MIT License](LICENSE)。地图数据 © OpenStreetMap 贡献者（ODbL）；精模参考照片来自重庆大学官网「光影重大」图集。
