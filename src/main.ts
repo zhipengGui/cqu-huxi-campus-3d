@@ -37,6 +37,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 app.appendChild(renderer.domElement);
+renderer.domElement.tabIndex = 0;
+renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus());
 
 const scene = new THREE.Scene();
 
@@ -416,6 +418,37 @@ function renderLayers(): void {
   }
 }
 
+// ---- 画质（自动/高/低）----
+type Quality = "auto" | "high" | "low";
+let quality: Quality = "auto";
+
+function resolveHighQuality(): boolean {
+  if (quality === "low") return false;
+  if (quality === "high") return true;
+  // 自动：移动端（粗指针）或内存 <=4GB 视为低配
+  const nav = window.navigator as (typeof window.navigator) & { deviceMemory?: number };
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const lowMem = nav.deviceMemory !== undefined && nav.deviceMemory <= 4;
+  return !(coarse || lowMem);
+}
+
+function applyQuality(): void {
+  const high = resolveHighQuality();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 2 : 1));
+  renderer.shadowMap.enabled = high;
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#quality-seg .tb")) {
+    b.classList.toggle("on", b.dataset.q === quality);
+  }
+}
+
+document.querySelector("#quality-seg")!.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".tb");
+  if (!btn || !btn.dataset.q) return;
+  quality = btn.dataset.q as Quality;
+  applyQuality();
+});
+applyQuality();
+
 // ---- 光影 ----
 const LIGHTING_DEFS: { key: PresetName; name: string; sub: string }[] = [
   { key: "morning", name: "晨光", sub: "树影初长" },
@@ -424,20 +457,24 @@ const LIGHTING_DEFS: { key: PresetName; name: string; sub: string }[] = [
   { key: "night", name: "夜景", sub: "灯火渐明" },
 ];
 let currentPreset: PresetName = "day";
+function applyLighting(key: PresetName): void {
+  currentPreset = key;
+  picker?.clearSelection();
+  dayNight?.apply(key);
+  for (const c of document.querySelectorAll<HTMLButtonElement>("#lighting-list .lt-card")) {
+    c.classList.toggle("on", c.dataset.key === key);
+  }
+}
 function renderLighting(): void {
   const list = document.querySelector("#lighting-list")!;
   list.innerHTML = "";
   for (const def of LIGHTING_DEFS) {
     const card = document.createElement("button");
     card.type = "button";
+    card.dataset.key = def.key;
     card.className = "lt-card" + (def.key === currentPreset ? " on" : "");
     card.innerHTML = `<strong>${def.name}</strong><small>${def.sub}</small>`;
-    card.addEventListener("click", () => {
-      currentPreset = def.key;
-      picker?.clearSelection();
-      dayNight?.apply(def.key);
-      for (const c of list.children) c.classList.toggle("on", c === card);
-    });
+    card.addEventListener("click", () => applyLighting(def.key));
     list.appendChild(card);
   }
 }
@@ -562,6 +599,85 @@ document.querySelector("#tl-fs")!.addEventListener("click", () => {
   if (!document.fullscreenEnabled) return;
   if (document.fullscreenElement) void document.exitFullscreen();
   else void document.documentElement.requestFullscreen();
+});
+
+// ---- 分享视角 / 导出图片 ----
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+function showToast(msg: string): void {
+  const t = document.querySelector("#toast")!;
+  t.textContent = msg;
+  t.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+document.querySelector("#tl-share")!.addEventListener("click", () => {
+  const p = camera.position;
+  const tg = controls.target;
+  const hash = `v=${Math.round(p.x)},${Math.round(p.y)},${Math.round(p.z)},` +
+    `${Math.round(tg.x)},${Math.round(tg.y)},${Math.round(tg.z)}`;
+  const url = location.origin + location.pathname + "#" + hash;
+  window.navigator.clipboard.writeText(url).then(
+    () => showToast("链接已复制，可分享当前视角"),
+    () => showToast("复制失败，请手动复制地址栏"),
+  );
+});
+
+document.querySelector("#tl-export")!.addEventListener("click", () => {
+  renderer.render(scene, camera);
+  const src = renderer.domElement;
+  const w = src.width;
+  const h = src.height;
+  const bar = Math.max(26, Math.round(h * 0.045));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h + bar;
+  const g = canvas.getContext("2d")!;
+  g.drawImage(src, 0, 0);
+  g.fillStyle = "rgba(15, 22, 32, 0.88)";
+  g.fillRect(0, h, w, bar);
+  g.fillStyle = "#fff";
+  g.font = `${Math.round(bar * 0.52)}px system-ui, "Microsoft YaHei", sans-serif`;
+  g.textBaseline = "middle";
+  g.textAlign = "left";
+  g.fillText("© OpenStreetMap 贡献者", bar * 0.7, h + bar / 2);
+  g.textAlign = "right";
+  g.fillText("重庆大学虎溪校区 3D 地图", w - bar * 0.7, h + bar / 2);
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = "huxi-campus-3d.png";
+  a.click();
+  showToast("图片已导出");
+});
+
+// 启动时从 URL hash 恢复视角（分享链接用）
+(function restoreViewFromHash(): void {
+  const m = location.hash.match(/v=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)/);
+  if (!m) return;
+  const [px, py, pz, tx, ty, tz] = m.slice(1).map(Number);
+  camera.position.set(px, py, pz);
+  controls.target.set(tx, ty, tz);
+  controls.update();
+})();
+
+// ---- 键盘快捷键 ----
+function escapeAll(): void {
+  if (navMode) setNavMode(false);
+  else if (tour.on) setTour(false);
+  else closeDetail();
+}
+window.addEventListener("keydown", (e) => {
+  const t = e.target as HTMLElement;
+  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
+  const k = e.key.toLowerCase();
+  if (k === "h") document.querySelector<HTMLButtonElement>("#tl-home")!.click();
+  else if (k === "n") document.querySelector<HTMLButtonElement>("#tl-compass")!.click();
+  else if (k === "1") applyLighting("morning");
+  else if (k === "2") applyLighting("day");
+  else if (k === "3") applyLighting("dusk");
+  else if (k === "4") applyLighting("night");
+  else if (e.key === "Escape") escapeAll();
+  else if (k === "?") showToast("快捷键：方向键旋转 · H全景 · N正北 · 1-4光影 · Esc退出");
 });
 
 // ---- 渲染循环（60fps 帽）----

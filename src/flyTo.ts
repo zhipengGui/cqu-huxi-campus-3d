@@ -28,6 +28,12 @@ export function flyTo(
   const dir = startCam.clone().sub(startTgt);
   if (dir.lengthSq() < 1e-6) dir.set(300, 400, 500);
   dir.normalize();
+  // 系统开启「减少动态效果」时直接跳转，不做飞行动画
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    camera.position.copy(target).add(dir.clone().multiplyScalar(distance));
+    controls.target.copy(target);
+    return;
+  }
   const endCam = target.clone().add(dir.multiplyScalar(distance));
 
   let raf = 0;
