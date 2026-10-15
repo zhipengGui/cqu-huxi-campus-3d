@@ -38,11 +38,16 @@ const MARK_COLORS: Record<string, number> = {
 
 function polygonGeo(pts: Pt[], y: number): THREE.BufferGeometry {
   const pos: number[] = [];
+  const uv: number[] = [];
   const idx: number[] = [];
-  for (const [px, py] of pts) pos.push(px, y, -py);
+  for (const [px, py] of pts) {
+    pos.push(px, y, -py);
+    uv.push(0, 0); // 补 uv 占位，保证可与 BoxGeometry/ShapeGeometry 等带 uv 几何合并
+  }
   for (let i = 1; i < pts.length - 1; i++) idx.push(0, i + 1, i);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
@@ -391,17 +396,17 @@ function athleticsTrack(
   infieldGeo.rotateX(-Math.PI / 2);
   infieldGeo.translate(0, Y_COURT, 0);
   buckets["infield"].push(infieldGeo);
-  // 条纹（沿长轴南北，20 条横纹）
+  // 条纹：内场已整体填 fieldGreen，只画 fieldStripe 隔条（10 条），避免与 ShapeGeometry 混入同一合并桶
   const fieldL = 2 * halfStraight;
   const fieldW = 2 * innerR;
   const stripeW = fieldL / 20;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 20; i += 2) {
     const y0 = cy - fieldL / 2 + i * stripeW;
     const stripGeo = polygonGeo(
       [[cx - fieldW / 2, y0], [cx + fieldW / 2, y0], [cx + fieldW / 2, y0 + stripeW], [cx - fieldW / 2, y0 + stripeW]],
       Y_COURT + 0.008,
     );
-    buckets[i % 2 === 0 ? "infield" : "stripe"].push(stripGeo);
+    buckets["stripe"].push(stripGeo);
   }
   // 9 条白色分道环线（内沿、8 条道间、外沿）
   for (let k = 0; k <= lanes; k++) {
@@ -493,7 +498,12 @@ export function buildSportsMarks(parent: THREE.Object3D, green: Area[]): void {
 
   const addMerged = (geos: THREE.BufferGeometry[], color: number): void => {
     if (!geos.length) return;
-    const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos)!;
+    const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos);
+    if (!merged) {
+      // 属性不一致合并失败：跳过该桶，绝不让 null mesh 进入场景导致全局崩溃
+      console.warn("[sports] mergeGeometries failed, skip bucket");
+      return;
+    }
     const mat = new THREE.MeshLambertMaterial({
       color,
       polygonOffset: true,
