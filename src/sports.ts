@@ -2,22 +2,44 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Area } from "./types";
 
-/** 运动场地精细标线（对标 gxu sports/basketball 程序化方案，运行时生成，非贴图）：
- *  篮球场完整标线+篮架 / 足球场标线+球门 / 网球场标线+球网 /
- *  羽毛球·排球简易标线+球网 / 泳池分道线 / 田径跑道（area≥15000 的地块自动识别）。
- *  坐标约定与 sceneBuilder 一致：几何顶点 (x 东, y 上, -y 北)。 */
+/** 运动场地精细标线（对标 gxu sports.py / basketball.py，配色与几何对齐官方）：
+ *  砖红跑道+9条白分道环线+内场20条条纹草坪 / 篮球teal底+橙红key区+白标线+斜拉篮架+镂空浅灰篮网 /
+ *  足球白线0.10+罚球弧只画禁区外段+杆件球门 / 网羽排浅灰球网 / 泳池分道线。
+ *  分层（logarithmicDepthBuffer 关闭后靠几何高差防 z-fighting）：
+ *  绿地底块 0.02 → 球场面层 0.06 → 标线 0.14。 */
 
 type Pt = [number, number];
 
-const Y_MARK = 0.12; // 与底色块(0.02)拉开 10cm，避免远距离 z-fighting 频闪
+const Y_COURT = 0.06; // 球场面层
+const Y_MARK = 0.14; // 标线（与面层拉开 8cm）
+const ARCS = 64;
 
-// ---- 标线几何工具（全部平面凸多边形 fan 三角化）----
+// ---- 配色（gxu build_campus.py 原值）----
+const MARK_COLORS: Record<string, number> = {
+  mark: 0xf5f3e7,      // sportWhite 暖白
+  trackA: 0xba563f,    // track 砖红
+  trackB: 0xb7543e,    // trackAlt 微暗交替
+  apron: 0xa9513e,     // trackApron 外圈红铺装
+  infield: 0x3d8650,   // fieldGreen
+  stripe: 0x458f57,    // fieldStripe
+  courtGreen: 0x347e69,// 篮球 teal 底
+  courtKey: 0xbd6447,  // 篮球 key 橙红
+  courtApron: 0x47746a,// 球场群外围铺装
+  dark: 0x246752,      // 篮架框
+  metal: 0x879593,     // 金属件
+  orange: 0xe5762c,    // 篮圈橙
+  glass: 0xa7c7c6,     // 篮板玻璃
+  net: 0xc1cabb,      // 球网浅灰（所有网统一）
+  goal: 0xf5f3e7,      // 足球门白
+  lane: 0x3a6f8a,      // 泳道线
+};
+
+// ---- 标线几何工具（凸多边形 fan 三角化，绕向已翻转为朝上）----
 
 function polygonGeo(pts: Pt[], y: number): THREE.BufferGeometry {
   const pos: number[] = [];
   const idx: number[] = [];
   for (const [px, py] of pts) pos.push(px, y, -py);
-  // 本模块的四边形顶点序为顺时针（俯视），翻转索引使法线朝上（+Y），否则被背面剔除
   for (let i = 1; i < pts.length - 1; i++) idx.push(0, i + 1, i);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
@@ -37,7 +59,7 @@ function lineMark(geos: THREE.BufferGeometry[], x1: number, y1: number, x2: numb
   ], y));
 }
 
-function arcBand(geos: THREE.BufferGeometry[], cx: number, cy: number, r: number, w: number, a0: number, a1: number, y = Y_MARK, segs = 28): void {
+function arcBand(geos: THREE.BufferGeometry[], cx: number, cy: number, r: number, w: number, a0: number, a1: number, y = Y_MARK, segs = ARCS): void {
   for (let i = 0; i < segs; i++) {
     const t0 = a0 + ((a1 - a0) * i) / segs;
     const t1 = a0 + ((a1 - a0) * (i + 1)) / segs;
@@ -48,10 +70,19 @@ function arcBand(geos: THREE.BufferGeometry[], cx: number, cy: number, r: number
 }
 
 function circleMark(geos: THREE.BufferGeometry[], cx: number, cy: number, r: number, w: number, y = Y_MARK): void {
-  arcBand(geos, cx, cy, r, w, 0, Math.PI * 2, y, 36);
+  arcBand(geos, cx, cy, r, w, 0, Math.PI * 2, y, ARCS + 8);
 }
 
-// ---- 3D 器材（box/cylinder/torus，按材质桶收集）----
+// 沿闭合折线的带状（用于分道环线）
+function closedLineStrip(geos: THREE.BufferGeometry[], pts: Pt[], w: number, y = Y_MARK): void {
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    lineMark(geos, a[0], a[1], b[0], b[1], w, y);
+  }
+}
+
+// ---- 3D 器材 ----
 
 function boxAt(buckets: Record<string, THREE.BufferGeometry[]>, key: string,
   sx: number, sy: number, sz: number, x: number, y: number, z: number): void {
@@ -60,115 +91,171 @@ function boxAt(buckets: Record<string, THREE.BufferGeometry[]>, key: string,
   buckets[key].push(g);
 }
 
-// ---- 篮球场（标准 28×15 标线 + 篮架）----
+// ---- 篮球场（5 色块 + 精确标线 + 斜拉篮架 + 镂空篮网）----
+
+function courtFloor(buckets: Record<string, THREE.BufferGeometry[]>,
+  x0: number, y0: number, x1: number, y1: number, key: string, longEW: boolean, cx: number, cy: number): void {
+  const map = (u: number, v: number): Pt => (longEW ? [cx + u, cy + v] : [cx + v, cy + u]);
+  const a = map(x0, y0), b = map(x1, y0), c = map(x1, y1), d = map(x0, y1);
+  buckets[key].push(polygonGeo([a, b, c, d], Y_COURT));
+}
 
 function basketballCourt(
   marks: THREE.BufferGeometry[], buckets: Record<string, THREE.BufferGeometry[]>,
   cx: number, cy: number, longEW: boolean,
 ): void {
   const map = (u: number, v: number): Pt => (longEW ? [cx + u, cy + v] : [cx + v, cy + u]);
-  const L = 14, W = 7.5; // 半场
-  const w = 0.12;
-  // 边界 + 中线
-  const c0 = map(-L, -W), c1 = map(L, -W), c2 = map(L, W), c3 = map(-L, W);
-  lineMark(marks, c0[0], c0[1], c1[0], c1[1], w);
-  lineMark(marks, c1[0], c1[1], c2[0], c2[1], w);
-  lineMark(marks, c2[0], c2[1], c3[0], c3[1], w);
-  lineMark(marks, c3[0], c3[1], c0[0], c0[1], w);
-  const m0 = map(0, -W), m1 = map(0, W);
-  lineMark(marks, m0[0], m0[1], m1[0], m1[1], w);
-  circleMark(marks, cx, cy, 1.8, w);
-  for (const s of [1, -1]) {
-    // 禁区（三边）+ 罚球圈
-    const k0 = map(s * L, -2.45), k1 = map(s * 8.2, -2.45), k2 = map(s * 8.2, 2.45), k3 = map(s * L, 2.45);
-    lineMark(marks, k0[0], k0[1], k1[0], k1[1], w);
-    lineMark(marks, k1[0], k1[1], k2[0], k2[1], w);
-    lineMark(marks, k2[0], k2[1], k3[0], k3[1], w);
-    const ft = map(s * 8.2, 0);
-    circleMark(marks, ft[0], ft[1], 1.8, w);
-    // 三分线：两段底线直线 + 朝中场 150° 弧（圆心篮下 u=±12.5）
-    for (const v of [-6.6, 6.6]) {
-      const t0 = map(s * L, v), t1 = map(s * 9.2, v);
-      lineMark(marks, t0[0], t0[1], t1[0], t1[1], w);
-    }
-    const rimC = map(s * 12.5, 0);
-    const base = longEW ? 0 : Math.PI / 2;
-    const a0 = s > 0 ? base + Math.PI - 1.31 : base - 1.31;
-    arcBand(marks, rimC[0], rimC[1], 6.75, w, a0, a0 + 2.62);
-    // 篮架：底座/立柱/篮板/篮圈（世界 z = -y 北）
-    const pillar = map(s * 14.9, 0);
-    const board = map(s * 13.7, 0);
-    const rim = map(s * 13.55, 0);
-    const pz = -pillar[1], bz = -board[1], rz = -rim[1];
-    boxAt(buckets, "dark", 1.1, 0.5, 0.8, pillar[0], 0.25, pz);
-    boxAt(buckets, "dark", 0.16, 3.6, 0.16, pillar[0], 1.8, pz);
-    boxAt(buckets, "dark", 0.9, 0.12, 0.12, (pillar[0] + board[0]) / 2, 3.4, (pz + bz) / 2);
-    const bw = longEW ? 0.06 : 1.8;
-    const bd = longEW ? 1.8 : 0.06;
-    boxAt(buckets, "board", bw, 1.05, bd, board[0], 3.0, bz);
-    const rg = new THREE.TorusGeometry(0.225, 0.02, 8, 20);
-    rg.rotateX(Math.PI / 2);
-    rg.translate(rim[0], 3.05, rz);
-    buckets["orange"].push(rg);
-  }
-}
+  const W = 0.05;
+  // 5 色块（teal 底 + 两端中央纵条橙红 key）
+  courtFloor(buckets, -7.5, -14, -2.45, 14, "courtGreen", longEW, cx, cy);
+  courtFloor(buckets, 2.45, -14, 7.5, 14, "courtGreen", longEW, cx, cy);
+  courtFloor(buckets, -2.45, -8.2, 2.45, 8.2, "courtGreen", longEW, cx, cy);
+  courtFloor(buckets, -2.45, -14, 2.45, -8.2, "courtKey", longEW, cx, cy);
+  courtFloor(buckets, -2.45, 8.2, 2.45, 14, "courtKey", longEW, cx, cy);
 
-// ---- 足球场（边界/中线/中圈/禁区/球门区/点球点/角弧/球门）----
+  const rect = (u0: number, v0: number, u1: number, v1: number): void => {
+    const a = map(u0, v0), b = map(u1, v0), c = map(u1, v1), d = map(u0, v1);
+    lineMark(marks, a[0], a[1], b[0], b[1], W);
+    lineMark(marks, b[0], b[1], c[0], c[1], W);
+    lineMark(marks, c[0], c[1], d[0], d[1], W);
+    lineMark(marks, d[0], d[1], a[0], a[1], W);
+  };
+  rect(-7.525, -14.025, 7.525, 14.025); // 边界
+  const m0 = map(0, -7.65), m1 = map(0, 7.65);
+  lineMark(marks, m0[0], m0[1], m1[0], m1[1], W); // 中线
+  circleMark(marks, cx, cy, 1.775, W); // 中圈
 
-function soccerField(marks: THREE.BufferGeometry[], buckets: Record<string, THREE.BufferGeometry[]>,
-  cx: number, cy: number, longEW: boolean, L: number, W: number, withGoal: boolean): void {
-  const map = (u: number, v: number): Pt => (longEW ? [cx + u, cy + v] : [cx + v, cy + u]);
-  const w = 0.14;
-  const hl = L / 2, hw = W / 2;
-  const c0 = map(-hl, -hw), c1 = map(hl, -hw), c2 = map(hl, hw), c3 = map(-hl, hw);
-  lineMark(marks, c0[0], c0[1], c1[0], c1[1], w);
-  lineMark(marks, c1[0], c1[1], c2[0], c2[1], w);
-  lineMark(marks, c2[0], c2[1], c3[0], c3[1], w);
-  lineMark(marks, c3[0], c3[1], c0[0], c0[1], w);
-  const m0 = map(0, -hw), m1 = map(0, hw);
-  lineMark(marks, m0[0], m0[1], m1[0], m1[1], w);
-  circleMark(marks, cx, cy, 9.15, w);
   for (const s of [1, -1]) {
-    // 禁区 16.5×40.32 + 球门区 5.5×18.32 + 点球点 + 罚球弧
-    const pa0 = map(s * hl, -20.16), pa1 = map(s * (hl - 16.5), -20.16),
-      pa2 = map(s * (hl - 16.5), 20.16), pa3 = map(s * hl, 20.16);
-    lineMark(marks, pa0[0], pa0[1], pa1[0], pa1[1], w);
-    lineMark(marks, pa1[0], pa1[1], pa2[0], pa2[1], w);
-    lineMark(marks, pa2[0], pa2[1], pa3[0], pa3[1], w);
-    const ga0 = map(s * hl, -9.16), ga1 = map(s * (hl - 5.5), -9.16),
-      ga2 = map(s * (hl - 5.5), 9.16), ga3 = map(s * hl, 9.16);
-    lineMark(marks, ga0[0], ga0[1], ga1[0], ga1[1], w);
-    lineMark(marks, ga1[0], ga1[1], ga2[0], ga2[1], w);
-    lineMark(marks, ga2[0], ga2[1], ga3[0], ga3[1], w);
-    const pk = map(s * (hl - 11), 0);
-    arcBand(marks, pk[0], pk[1], 9.15, w, s > 0 ? Math.PI * 0.7 : -Math.PI * 0.3, s > 0 ? Math.PI * 1.3 : Math.PI * 0.3);
-    // 角弧
-    for (const v of [-hw, hw]) {
-      const corner = map(s * hl, v);
-      const av = Math.atan2(v, s); // 朝场内
-      arcBand(marks, corner[0], corner[1], 1, w, av - Math.PI / 2, av + Math.PI / 2);
+    const end = s * 14, free = s * (14 - 5.775), rim = s * (14 - 1.575);
+    rect(-2.425, end, 2.425, free); // 禁区
+    // 罚球半圆朝中场实线
+    const a0 = s < 0 ? 0 : Math.PI;
+    arcBand(marks, cx, cy + free, 1.775, W, a0, a0 + Math.PI, Y_MARK, 32);
+    // 内侧虚线（6 段小弧）
+    for (let k = 0; k < 6; k++) {
+      arcBand(marks, cx, cy + free, 1.775, W,
+        a0 + Math.PI + (k * Math.PI) / 6, a0 + Math.PI + (k + 0.55) * Math.PI / 6, Y_MARK, 4);
     }
-    if (withGoal) {
-      const gp = map(s * (hl + 0.8), 0);
-      const gz = -gp[1];
-      const gwAlong = longEW ? 0.12 : 7.32;
-      const gwAcross = longEW ? 7.32 : 0.12;
-      boxAt(buckets, "goal", gwAlong, 2.44, gwAcross, gp[0], 1.22, gz);
-      const wAlong = longEW ? 0.1 : 0.1;
-      for (const v of [-3.66, 3.66]) {
-        const post = map(s * (hl + 0.8), v);
-        boxAt(buckets, "goal", wAlong, 2.44, wAlong, post[0], 1.22, -post[1]);
+    // 三分线：底角直线 + 大弧
+    const radius = 6.725, side = 6.575;
+    const dy = Math.sqrt(radius * radius - side * side);
+    const t0 = map(-side, end), t1 = map(-side, rim - s * dy);
+    lineMark(marks, t0[0], t0[1], t1[0], t1[1], W);
+    const t2 = map(side, end), t3 = map(side, rim - s * dy);
+    lineMark(marks, t2[0], t2[1], t3[0], t3[1], W);
+    const a1 = s < 0 ? Math.atan2(dy, side) : Math.PI + Math.atan2(dy, side);
+    const a2 = s < 0 ? Math.PI - Math.atan2(dy, side) : Math.PI * 2 - Math.atan2(dy, side);
+    arcBand(marks, cx, cy + rim, radius, W, a1, a2, Y_MARK, 64);
+    // 合理冲撞区
+    arcBand(marks, cx, cy + rim, 1.275, W, a0, a0 + Math.PI, Y_MARK, 24);
+
+    // 篮架：底座/立柱/篮板框/篮板玻璃/白条/篮圈/镂空篮网
+    const post = map(s * 14.55, 0);
+    const board = map(s * 12.815, 0);
+    const rimC = map(s * 12.425, 0);
+    const pz = -post[1], bz = -board[1], rz = -rimC[1];
+    boxAt(buckets, "metal", 0.74, 0.5, 0.12, post[0], 0.06, pz); // 底座
+    boxAt(buckets, "dark", 0.22, 2.7, 0.22, post[0], 1.38, pz); // 立柱
+    // 斜拉杆（立柱顶到篮板顶）
+    const back = map(s * 13.35, 0);
+    const braceLen = Math.hypot(back[0] - post[0], back[1] - post[1]) || 0.01;
+    const braceMid: [number, number, number] = [
+      (post[0] + back[0]) / 2, 3.5, (-post[1] + (-back[1])) / 2,
+    ];
+    const brace = new THREE.CylinderGeometry(0.05, 0.05, braceLen + 1.8, 6);
+    brace.translate(braceMid[0], braceMid[1], braceMid[2]);
+    buckets["dark"].push(brace);
+    // 篮板（玻璃+框）
+    const bw = longEW ? 0.05 : 1.8;
+    const bd = longEW ? 1.8 : 0.05;
+    boxAt(buckets, "glass", bw, 1.05, bd, board[0], 3.425, bz);
+    boxAt(buckets, "mark", (longEW ? 0.06 : 1.86), 1.05, (longEW ? 1.86 : 0.06), board[0], 3.425, bz); // 篮板白框
+    // 篮圈（torus 水平）
+    const ring = new THREE.TorusGeometry(0.225, 0.018, 8, 24);
+    ring.rotateX(Math.PI / 2);
+    ring.translate(rimC[0], 3.041, rz);
+    buckets["orange"].push(ring);
+    // 镂空篮网（2 层×12 角，浅灰细管）
+    for (let lvl = 0; lvl < 2; lvl++) {
+      const h0 = 3.041 - 0.2 * lvl;
+      const h1 = 3.041 - 0.2 * (lvl + 1);
+      const r0 = 0.225 - 0.045 * lvl;
+      const r1 = 0.225 - 0.045 * (lvl + 1);
+      for (let i = 0; i < 12; i++) {
+        const a = (i + (lvl % 2) * 0.5) * Math.PI * 2 / 12;
+        const b = a + Math.PI / 12;
+        const p0: [number, number, number] = [rimC[0] + r0 * Math.cos(a), h0, rz + r0 * Math.sin(a)];
+        const p1: [number, number, number] = [rimC[0] + r1 * Math.cos(b), h1, rz + r1 * Math.sin(b)];
+        const lineLen = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 0.01;
+        const ng = new THREE.CylinderGeometry(0.006, 0.006, lineLen, 3);
+        ng.translate((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2);
+        buckets["net"].push(ng);
       }
     }
   }
 }
 
-// ---- 网球场（外框+单打线+发球线+球网）----
+// ---- 足球场（白线 0.10 + 罚球弧只画禁区外段 + 杆件球门）----
+
+function soccerField(marks: THREE.BufferGeometry[], buckets: Record<string, THREE.BufferGeometry[]>,
+  cx: number, cy: number, longEW: boolean, L: number, W: number, withGoal: boolean): void {
+  const map = (u: number, v: number): Pt => (longEW ? [cx + u, cy + v] : [cx + v, cy + u]);
+  const w = 0.1;
+  const hl = L / 2, hw = W / 2;
+  const rect = (u0: number, v0: number, u1: number, v1: number): void => {
+    const a = map(u0, v0), b = map(u1, v0), c = map(u1, v1), d = map(u0, v1);
+    lineMark(marks, a[0], a[1], b[0], b[1], w);
+    lineMark(marks, b[0], b[1], c[0], c[1], w);
+    lineMark(marks, c[0], c[1], d[0], d[1], w);
+    lineMark(marks, d[0], d[1], a[0], a[1], w);
+  };
+  rect(-hl, -hw, hl, hw);
+  const m0 = map(0, -hw), m1 = map(0, hw);
+  lineMark(marks, m0[0], m0[1], m1[0], m1[1], w);
+  circleMark(marks, cx, cy, 9.15, w);
+  for (const s of [1, -1]) {
+    rect(s * hl - s * 16.5, -20.16, s * hl, 20.16); // 禁区
+    rect(s * hl - s * 5.5, -9.16, s * hl, 9.16); // 球门区
+    const pk = map(s * (hl - 11), 0);
+    arcBand(marks, pk[0], pk[1], 9.15, w,
+      s > 0 ? Math.PI * 0.7 : -Math.PI * 0.3,
+      s > 0 ? Math.PI * 1.3 : Math.PI * 0.3, Y_MARK, 48);
+    for (const v of [-hw, hw]) {
+      const corner = map(s * hl, v);
+      const av = Math.atan2(v, s);
+      arcBand(marks, corner[0], corner[1], 1, w, av - Math.PI / 2, av + Math.PI / 2, Y_MARK, 16);
+    }
+    if (withGoal) {
+      // 杆件球门：两立柱+横梁+斜背撑
+      const gp = map(s * hl, 0);
+      const gz = -gp[1];
+      for (const v of [-3.66, 3.66]) {
+        const post = map(s * hl, v);
+        boxAt(buckets, "goal", 0.08, 2.44, 0.08, post[0], 1.22, -post[1]);
+      }
+      const gwAlong = longEW ? 0.08 : 7.32;
+      const gwAcross = longEW ? 7.32 : 0.08;
+      boxAt(buckets, "goal", gwAlong, 0.08, gwAcross, gp[0], 2.4, gz); // 横梁
+      // 网线（简化：几条竖网线）
+      for (let k = 0; k < 6; k++) {
+        const v = -3.66 + (k * 7.32) / 5;
+        const np = map(s * hl, v);
+        const nb = map(s * (hl + 1.5), v);
+        const lineLen = Math.hypot(nb[0] - np[0], nb[1] - np[1]) || 0.01;
+        const ng = new THREE.CylinderGeometry(0.008, 0.008, lineLen, 3);
+        ng.translate((np[0] + nb[0]) / 2, 1.3, (-np[1] - nb[1]) / 2);
+        buckets["net"].push(ng);
+      }
+    }
+  }
+}
+
+// ---- 网球场 ----
 
 function tennisCourt(marks: THREE.BufferGeometry[], buckets: Record<string, THREE.BufferGeometry[]>,
   cx: number, cy: number, longEW: boolean): void {
   const map = (u: number, v: number): Pt => (longEW ? [cx + u, cy + v] : [cx + v, cy + u]);
-  const w = 0.1;
+  const w = 0.06;
   const hl = 11.885, hwD = 5.485, hwS = 4.115;
   const rect = (u0: number, v0: number, u1: number, v1: number): void => {
     const a = map(u0, v0), b = map(u1, v0), c = map(u1, v1), d = map(u0, v1);
@@ -177,35 +264,37 @@ function tennisCourt(marks: THREE.BufferGeometry[], buckets: Record<string, THRE
     lineMark(marks, c[0], c[1], d[0], d[1], w);
     lineMark(marks, d[0], d[1], a[0], a[1], w);
   };
-  rect(-hl, -hwD, hl, hwD); // 双打外框
-  rect(-hl, -hwS, hl, hwS); // 单打线
-  rect(-5.485, -hwD, 5.485, hwD); // 发球线区
+  rect(-hl, -hwD, hl, hwD);
+  rect(-hl, -hwS, hl, hwS);
+  rect(-5.485, -hwD, 5.485, hwD);
   const s0 = map(-5.485, 0), s1 = map(5.485, 0);
-  lineMark(marks, s0[0], s0[1], s1[0], s1[1], w); // 中线
-  // 球网（灰蓝，避免远处一片黑棒）
-  const nz = -cy;
+  lineMark(marks, s0[0], s0[1], s1[0], s1[1], w);
+  // 浅灰球网 + 白顶带
   const nw = longEW ? 0.05 : 12.8;
   const nd = longEW ? 12.8 : 0.05;
-  boxAt(buckets, "net", nw, 0.75, nd, cx, 0.41, nz);
-  boxAt(buckets, "board", nw, 0.06, nd, cx, 0.81, nz);
+  boxAt(buckets, "net", nw, 0.85, nd, cx, 0.46, -cy);
+  boxAt(buckets, "mark", nw, 0.06, nd, cx, 0.91, -cy);
   for (const s of [1, -1]) {
     const post = longEW ? [cx, cy + s * 6.55] : [cx + s * 6.55, cy];
-    boxAt(buckets, "dark", 0.1, 0.85, 0.1, post[0], 0.42, -post[1]);
+    boxAt(buckets, "metal", 0.1, 1.07, 0.1, post[0], 0.53, -post[1]);
   }
 }
 
-// ---- 羽毛球场（边界+中线+前发球线+网）----
+// ---- 羽毛球场 ----
 
 function badmintonCourt(marks: THREE.BufferGeometry[], buckets: Record<string, THREE.BufferGeometry[]>,
   cx: number, cy: number, longEW: boolean): void {
   const map = (u: number, v: number): Pt => (longEW ? [cx + u, cy + v] : [cx + v, cy + u]);
-  const w = 0.08;
+  const w = 0.06;
   const hl = 6.7, hw = 3.05;
-  const a = map(-hl, -hw), b = map(hl, -hw), c = map(hl, hw), d = map(-hl, hw);
-  lineMark(marks, a[0], a[1], b[0], b[1], w);
-  lineMark(marks, b[0], b[1], c[0], c[1], w);
-  lineMark(marks, c[0], c[1], d[0], d[1], w);
-  lineMark(marks, d[0], d[1], a[0], a[1], w);
+  const rect = (u0: number, v0: number, u1: number, v1: number): void => {
+    const a = map(u0, v0), b = map(u1, v0), c = map(u1, v1), d = map(u0, v1);
+    lineMark(marks, a[0], a[1], b[0], b[1], w);
+    lineMark(marks, b[0], b[1], c[0], c[1], w);
+    lineMark(marks, c[0], c[1], d[0], d[1], w);
+    lineMark(marks, d[0], d[1], a[0], a[1], w);
+  };
+  rect(-hl, -hw, hl, hw);
   const m0 = map(-hl, 0), m1 = map(hl, 0);
   lineMark(marks, m0[0], m0[1], m1[0], m1[1], w);
   for (const s of [1, -1]) {
@@ -214,21 +303,24 @@ function badmintonCourt(marks: THREE.BufferGeometry[], buckets: Record<string, T
   }
   const nw = longEW ? 0.04 : 6.5;
   const nd = longEW ? 6.5 : 0.04;
-  boxAt(buckets, "net", nw, 1.35, nd, cx, 0.71, -cy);
+  boxAt(buckets, "net", nw, 1.45, nd, cx, 0.74, -cy);
 }
 
-// ---- 排球场（边界+中线+进攻线+网）----
+// ---- 排球场 ----
 
 function volleyballCourt(marks: THREE.BufferGeometry[], buckets: Record<string, THREE.BufferGeometry[]>,
   cx: number, cy: number, longEW: boolean): void {
   const map = (u: number, v: number): Pt => (longEW ? [cx + u, cy + v] : [cx + v, cy + u]);
-  const w = 0.1;
+  const w = 0.07;
   const hl = 9, hw = 4.5;
-  const a = map(-hl, -hw), b = map(hl, -hw), c = map(hl, hw), d = map(-hl, hw);
-  lineMark(marks, a[0], a[1], b[0], b[1], w);
-  lineMark(marks, b[0], b[1], c[0], c[1], w);
-  lineMark(marks, c[0], c[1], d[0], d[1], w);
-  lineMark(marks, d[0], d[1], a[0], a[1], w);
+  const rect = (u0: number, v0: number, u1: number, v1: number): void => {
+    const a = map(u0, v0), b = map(u1, v0), c = map(u1, v1), d = map(u0, v1);
+    lineMark(marks, a[0], a[1], b[0], b[1], w);
+    lineMark(marks, b[0], b[1], c[0], c[1], w);
+    lineMark(marks, c[0], c[1], d[0], d[1], w);
+    lineMark(marks, d[0], d[1], a[0], a[1], w);
+  };
+  rect(-hl, -hw, hl, hw);
   for (const s of [1, -1]) {
     const a0 = map(s * 3, -hw), a1 = map(s * 3, hw);
     lineMark(marks, a0[0], a0[1], a1[0], a1[1], w);
@@ -238,11 +330,11 @@ function volleyballCourt(marks: THREE.BufferGeometry[], buckets: Record<string, 
   boxAt(buckets, "net", nw, 1.15, nd, cx, 0.62, -cy);
 }
 
-// ---- 田径跑道（胶囊环带 8 道 + 内场 + 内场足球标线）----
+// ---- 田径跑道（胶囊环带 8 道 + apron + 9 白分道环线 + 内场 20 条纹 + 足球标线）----
 
 function stadiumPath(cx: number, cy: number, halfStraight: number, R: number): Pt[] {
   const pts: Pt[] = [];
-  const seg = 24;
+  const seg = 32;
   pts.push([cx + R, cy - halfStraight]);
   pts.push([cx + R, cy + halfStraight]);
   for (let i = 1; i < seg; i++) {
@@ -281,43 +373,52 @@ function athleticsTrack(
   cx: number, cy: number, halfStraight: number, R: number,
 ): void {
   const laneW = 1.22;
-  const y = 0.1; // 高于绿地底块(0.02) 8cm，防频闪
-  // 内场填充（胶囊 Shape → 三角化）
-  const shape = new THREE.Shape();
-  shape.moveTo(cx + R, cy - halfStraight);
-  shape.lineTo(cx + R, cy + halfStraight);
-  shape.absarc(cx, cy + halfStraight, R, 0, Math.PI, false);
-  shape.lineTo(cx - R, cy - halfStraight);
-  shape.absarc(cx, cy - halfStraight, R, Math.PI, Math.PI * 2, false);
-  const infield = new THREE.ShapeGeometry(shape);
-  infield.rotateX(-Math.PI / 2);
-  buckets["infield"].push(infield);
-  // 8 道交替色
-  for (let i = 0; i < 8; i++) {
-    const rMid = R + i * laneW + laneW / 2;
-    bandFromClosedPath(buckets[i % 2 === 0 ? "trackA" : "trackB"],
-      stadiumPath(cx, cy, halfStraight, rMid), laneW, y);
+  const lanes = 8;
+  const innerR = R - lanes * laneW; // 内沿半径
+  // apron 外圈红铺装
+  const outerEdge = stadiumPath(cx, cy, halfStraight, R + 1.5);
+  bandFromClosedPath(buckets["apron"], outerEdge, 1.5, Y_COURT);
+  // 8 道环带（相邻交替 track/trackAlt）
+  for (let lane = 0; lane < lanes; lane++) {
+    const rMid = innerR + lane * laneW + laneW / 2;
+    bandFromClosedPath(buckets[lane % 2 === 0 ? "trackA" : "trackB"],
+      stadiumPath(cx, cy, halfStraight, rMid), laneW, Y_COURT);
   }
-  // 内场小型足球场（横放，尺寸适配内场可用区域）
-  const fieldL = Math.max(Math.min(2 * R - 12, 76), 40);
-  const fieldW = Math.max(Math.min(2 * halfStraight - 12, 54), 30);
-  soccerField(marks, buckets, cx, cy, true, fieldL, fieldW, false);
+  // 内场填充（胶囊 Shape）
+  const innerPath = stadiumPath(cx, cy, halfStraight, innerR);
+  const innerShape = new THREE.Shape(innerPath.map(([x, y]) => new THREE.Vector2(x, y)));
+  const infieldGeo = new THREE.ShapeGeometry(innerShape);
+  infieldGeo.rotateX(-Math.PI / 2);
+  infieldGeo.translate(0, Y_COURT, 0);
+  buckets["infield"].push(infieldGeo);
+  // 条纹（沿长轴南北，20 条横纹）
+  const fieldL = 2 * halfStraight;
+  const fieldW = 2 * innerR;
+  const stripeW = fieldL / 20;
+  for (let i = 0; i < 20; i++) {
+    const y0 = cy - fieldL / 2 + i * stripeW;
+    const stripGeo = polygonGeo(
+      [[cx - fieldW / 2, y0], [cx + fieldW / 2, y0], [cx + fieldW / 2, y0 + stripeW], [cx - fieldW / 2, y0 + stripeW]],
+      Y_COURT + 0.008,
+    );
+    buckets[i % 2 === 0 ? "infield" : "stripe"].push(stripGeo);
+  }
+  // 9 条白色分道环线（内沿、8 条道间、外沿）
+  for (let k = 0; k <= lanes; k++) {
+    const r = innerR + k * laneW;
+    closedLineStrip(marks, stadiumPath(cx, cy, halfStraight, r), 0.07, Y_MARK);
+  }
+  // 终点线（直道）
+  const fin0 = [cx + R, cy - halfStraight + 9];
+  const fin1 = [cx + innerR, cy - halfStraight + 9];
+  lineMark(marks, fin0[0], fin0[1], fin1[0], fin1[1], 0.07);
+  // 内场足球标线
+  const fL = Math.max(Math.min(2 * innerR - 8, 76), 40);
+  const fW = Math.max(Math.min(2 * halfStraight - 8, 54), 30);
+  soccerField(marks, buckets, cx, cy, true, fL, fW, false);
 }
 
 // ---- 主入口 ----
-
-const MARK_COLORS: Record<string, number> = {
-  mark: 0xf2f4ee,
-  trackA: 0xc9735c,
-  trackB: 0xd6826b,
-  infield: 0x7fae66,
-  dark: 0x3d4348,
-  board: 0xe8eae6,
-  orange: 0xd9662f,
-  net: 0x5f6a72,
-  goal: 0xf0f2ee,
-  lane: 0x3a6f8a,
-};
 
 export function buildSportsMarks(parent: THREE.Object3D, green: Area[]): void {
   const marks: THREE.BufferGeometry[] = [];
@@ -341,7 +442,6 @@ export function buildSportsMarks(parent: THREE.Object3D, green: Area[]): void {
     const area = bw * bh;
 
     if (a.kind === "pitch" && !a.sport && area >= 15000) {
-      // 田径跑道（虎溪主田径场，OSM 未标 track）；半径/直道按地块尺寸适配，确保跑道完全落在地块内
       const R = Math.min(44, bw / 2 - 10.2);
       const hs = Math.max(bh / 2 - (R + 9.76), 20);
       athleticsTrack(marks, buckets, cx, cy, hs, R);
@@ -350,7 +450,6 @@ export function buildSportsMarks(parent: THREE.Object3D, green: Area[]): void {
     if (a.kind !== "pitch" && a.kind !== "pool") continue;
 
     if (a.kind === "pool") {
-      // 分道线：沿长轴，每 2.5m 一道
       const longEW = bw >= bh;
       const Lmax = longEW ? bw : bh;
       const Wmax = longEW ? bh : bw;
