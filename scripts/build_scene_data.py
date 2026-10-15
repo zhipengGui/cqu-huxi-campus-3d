@@ -430,6 +430,12 @@ def main():
             landmark = "library"
         elif inside and b["name"] == "学生活动中心":
             landmark = "activity"
+        elif inside and b["id"] == 14628790:
+            # 综合楼（毛石立面地标，id 锁定防误标）
+            landmark = "zonghe"
+        elif inside and b["id"] == 14108774:
+            # 理科楼主楼（三栋同名中取主记录，id 锁定）
+            landmark = "likelou"
         elif inside and b["tags"].get("leisure") in ("sports_hall", "stadium") \
                 and area > gym_area:
             # 必须是紧凑的馆体，不是整个田径场/运动区
