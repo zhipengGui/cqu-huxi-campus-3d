@@ -9,7 +9,7 @@ import type { Area } from "./types";
 
 type Pt = [number, number];
 
-const Y_MARK = 0.06;
+const Y_MARK = 0.12; // 与底色块(0.02)拉开 10cm，避免远距离 z-fighting 频闪
 
 // ---- 标线几何工具（全部平面凸多边形 fan 三角化）----
 
@@ -281,7 +281,7 @@ function athleticsTrack(
   cx: number, cy: number, halfStraight: number, R: number,
 ): void {
   const laneW = 1.22;
-  const y = 0.045;
+  const y = 0.1; // 高于绿地底块(0.02) 8cm，防频闪
   // 内场填充（胶囊 Shape → 三角化）
   const shape = new THREE.Shape();
   shape.moveTo(cx + R, cy - halfStraight);
@@ -298,8 +298,10 @@ function athleticsTrack(
     bandFromClosedPath(buckets[i % 2 === 0 ? "trackA" : "trackB"],
       stadiumPath(cx, cy, halfStraight, rMid), laneW, y);
   }
-  // 内场足球 96×62（长轴南北）
-  soccerField(marks, buckets, cx, cy, false, 96, 62, false);
+  // 内场小型足球场（横放，尺寸适配内场可用区域）
+  const fieldL = Math.max(Math.min(2 * R - 12, 76), 40);
+  const fieldW = Math.max(Math.min(2 * halfStraight - 12, 54), 30);
+  soccerField(marks, buckets, cx, cy, true, fieldL, fieldW, false);
 }
 
 // ---- 主入口 ----
@@ -339,8 +341,10 @@ export function buildSportsMarks(parent: THREE.Object3D, green: Area[]): void {
     const area = bw * bh;
 
     if (a.kind === "pitch" && !a.sport && area >= 15000) {
-      // 田径跑道（虎溪主田径场，OSM 未标 track）
-      athleticsTrack(marks, buckets, cx, cy, (bh - 2 * 44 - 9.76) / 2, 44);
+      // 田径跑道（虎溪主田径场，OSM 未标 track）；半径/直道按地块尺寸适配，确保跑道完全落在地块内
+      const R = Math.min(44, bw / 2 - 10.2);
+      const hs = Math.max(bh / 2 - (R + 9.76), 20);
+      athleticsTrack(marks, buckets, cx, cy, hs, R);
       continue;
     }
     if (a.kind !== "pitch" && a.kind !== "pool") continue;
@@ -394,8 +398,8 @@ export function buildSportsMarks(parent: THREE.Object3D, green: Area[]): void {
     const mat = new THREE.MeshLambertMaterial({
       color,
       polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -1,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     });
     const mesh = new THREE.Mesh(merged, mat);
     mesh.receiveShadow = true;

@@ -117,6 +117,7 @@ export function buildTrees(
   roads: Road[],
   water: Area[],
   buildings: Building[],
+  boundary?: Pt[] | null,
 ): number {
   const rng = mulberry32(20261013);
 
@@ -126,6 +127,7 @@ export function buildTrees(
   const buildingBoxes = buildings.map((b) => ({ bbox: bbox(b.polygon), pts: b.polygon }));
 
   function blocked(x: number, y: number): boolean {
+    if (boundary && !pointInPoly(x, y, boundary)) return true; // 校界外不种树
     for (const wb of waterBoxes) {
       if (x >= wb.bbox[0] && x <= wb.bbox[2] && y >= wb.bbox[1] && y <= wb.bbox[3]
         && pointInPoly(x, y, wb.pts)) return true;
@@ -145,13 +147,16 @@ export function buildTrees(
     return false;
   }
 
-  // 采样布点：绿地内散植
+  // 采样布点：绿地内散植（校界外整块跳过；大块草地按林地密度密植——西南角林地草坪带）
   const templates: Pt[][] = [[], [], []]; // 0 阔叶 / 1 小阔叶 / 2 棕榈
   let total = 0;
   for (const g of green) {
-    const density = DENSITY[g.kind ?? "park"];
-    if (!density) continue;
     const outer = g.outers[0];
+    if (!outer) continue;
+    if (boundary && !pointInPoly(outer[0][0], outer[0][1], boundary)) continue;
+    let density = DENSITY[g.kind ?? "park"];
+    if (!density) continue;
+    if (g.kind === "grass" && shoelace(outer) > 50000) density = DENSITY.forest; // 大草地=林地密植
     const n = Math.min(MAX_PER_AREA, Math.floor(shoelace(outer) * density));
     const [x0, y0, x1, y1] = bbox(outer);
     let accepted = 0;

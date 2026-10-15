@@ -291,7 +291,7 @@ async function loadScene(): Promise<void> {
     return fallbackLandmark(b);
   }));
   for (const g of landmarkGroups) buildings.add(g);
-  const treeCount = buildTrees(gTrees, data.green, data.roads, data.water, data.buildings);
+  const treeCount = buildTrees(gTrees, data.green, data.roads, data.water, data.buildings, data.boundary?.pts);
 
   dayNight = new DayNight(scene, hemi, sun, buildings);
   dayNight.apply("day");
