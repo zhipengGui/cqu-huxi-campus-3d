@@ -17,7 +17,8 @@ function polygonGeo(pts: Pt[], y: number): THREE.BufferGeometry {
   const pos: number[] = [];
   const idx: number[] = [];
   for (const [px, py] of pts) pos.push(px, y, -py);
-  for (let i = 1; i < pts.length - 1; i++) idx.push(0, i, i + 1);
+  // 本模块的四边形顶点序为顺时针（俯视），翻转索引使法线朝上（+Y），否则被背面剔除
+  for (let i = 1; i < pts.length - 1; i++) idx.push(0, i + 1, i);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
@@ -181,15 +182,15 @@ function tennisCourt(marks: THREE.BufferGeometry[], buckets: Record<string, THRE
   rect(-5.485, -hwD, 5.485, hwD); // 发球线区
   const s0 = map(-5.485, 0), s1 = map(5.485, 0);
   lineMark(marks, s0[0], s0[1], s1[0], s1[1], w); // 中线
-  // 球网
+  // 球网（灰蓝，避免远处一片黑棒）
   const nz = -cy;
   const nw = longEW ? 0.05 : 12.8;
   const nd = longEW ? 12.8 : 0.05;
-  boxAt(buckets, "net", nw, 0.85, nd, cx, 0.47, nz);
-  boxAt(buckets, "board", nw, 0.06, nd, cx, 0.92, nz);
+  boxAt(buckets, "net", nw, 0.75, nd, cx, 0.41, nz);
+  boxAt(buckets, "board", nw, 0.06, nd, cx, 0.81, nz);
   for (const s of [1, -1]) {
     const post = longEW ? [cx, cy + s * 6.55] : [cx + s * 6.55, cy];
-    boxAt(buckets, "dark", 0.1, 1.07, 0.1, post[0], 0.53, -post[1]);
+    boxAt(buckets, "dark", 0.1, 0.85, 0.1, post[0], 0.42, -post[1]);
   }
 }
 
@@ -213,7 +214,7 @@ function badmintonCourt(marks: THREE.BufferGeometry[], buckets: Record<string, T
   }
   const nw = longEW ? 0.04 : 6.5;
   const nd = longEW ? 6.5 : 0.04;
-  boxAt(buckets, "net", nw, 1.55, nd, cx, 0.8, -cy);
+  boxAt(buckets, "net", nw, 1.35, nd, cx, 0.71, -cy);
 }
 
 // ---- 排球场（边界+中线+进攻线+网）----
@@ -311,7 +312,7 @@ const MARK_COLORS: Record<string, number> = {
   dark: 0x3d4348,
   board: 0xe8eae6,
   orange: 0xd9662f,
-  net: 0x2f3438,
+  net: 0x5f6a72,
   goal: 0xf0f2ee,
   lane: 0x3a6f8a,
 };

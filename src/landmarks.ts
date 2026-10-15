@@ -313,7 +313,8 @@ export function buildZonghe(b: Building): THREE.Group {
   return g;
 }
 
-/** 理科楼：浅灰白错落体块——主体 + 沿长轴 40% 的高塔段（31.5m），横百叶立面 */
+/** 理科楼：板楼组合——玻璃基座连体 + 三条板楼沿短轴排布、高度错落
+ *  （官方：外墙为石材幕墙/铝单板/玻璃幕墙/铝合金格栅，灰白色调，南北区高低错落，31.5m/7F） */
 export function buildLikelou(b: Building): THREE.Group {
   const [cx, cy] = bboxCenter(b.polygon);
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -324,53 +325,52 @@ export function buildLikelou(b: Building): THREE.Group {
   const eastLong = x1 - x0 >= y1 - y0;
   const L = Math.max(x1 - x0, y1 - y0);
   const D = Math.min(x1 - x0, y1 - y0);
-  const totalH = Math.max(b.height, 24);
-  const bodyH = totalH * 0.62;
-  const towerH = totalH - bodyH;
-  const towerL = L * 0.4;
+  const baseH = 4;
 
   const g = new THREE.Group();
   g.position.set(cx, 0, -cy);
   g.rotation.y = eastLong ? 0 : Math.PI / 2;
 
-  const tex = louverTexture();
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  const louverMat = new THREE.MeshLambertMaterial({ map: tex });
-  const plainMat = new THREE.MeshLambertMaterial({ color: 0xe3e2dd });
-  const glassMat = new THREE.MeshLambertMaterial({ color: GLASS });
-
-  // 主体：轮廓拉伸三段（玻璃底座 + 百叶主体 + 平顶）
+  // 玻璃基座（真实轮廓连体）
   const shape = new THREE.Shape(b.polygon.map(([x, y]) => new THREE.Vector2(x - cx, y - cy)));
   for (const hole of b.holes) {
     shape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x - cx, y - cy))));
   }
-  const mk = (depth: number, y: number, mat: THREE.Material): THREE.Mesh => {
-    const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-    geo.rotateX(-Math.PI / 2);
-    geo.translate(0, y, 0);
-    return new THREE.Mesh(geo, mat);
-  };
-  g.add(mk(3.8, 0, glassMat));
-  g.add(mk(bodyH - 3.8, 3.8, louverMat));
+  const baseGeo = new THREE.ExtrudeGeometry(shape, { depth: baseH, bevelEnabled: false });
+  baseGeo.rotateX(-Math.PI / 2);
+  g.add(new THREE.Mesh(baseGeo, new THREE.MeshLambertMaterial({ color: GLASS })));
 
-  // 高塔段（局部坐标：长轴 -L/2 端起 40%，错落体块）
-  const tower = new THREE.Mesh(
-    new THREE.BoxGeometry(towerL, towerH, Math.max(D * 0.9, 18)),
-    [plainMat, plainMat, louverMat, louverMat, louverMat, louverMat],
-  );
-  tower.position.set(-L / 2 + towerL / 2, bodyH + towerH / 2, 0);
-  g.add(tower);
+  // 三条板楼：沿短轴排布，长度与高度错落（灰白铝板+横百叶）
+  const tex = louverTexture();
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  const louverMat = new THREE.MeshLambertMaterial({ map: tex });
+  const plainMat = new THREE.MeshLambertMaterial({ color: 0xe6e5e0 });
+  const slabs: [number, number, number][] = [
+    // [长度比例, 短轴位置比例, 高度]
+    [0.88, -0.3, Math.max(b.height, 28)],
+    [0.68, 0.02, Math.max(b.height * 0.82, 23)],
+    [0.5, 0.32, Math.max(b.height * 0.66, 18)],
+  ];
+  const slabD = Math.max(Math.min(D * 0.3, 20), 14);
+  for (const [lr, zr, h] of slabs) {
+    const slabL = L * lr;
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(slabL, h - baseH, slabD),
+      [louverMat, louverMat, plainMat, plainMat, louverMat, louverMat],
+    );
+    slab.position.set((lr - 1) * L * 0.06, baseH + (h - baseH) / 2, D * zr);
+    g.add(slab);
+    // 白色设备带
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(slabL + 0.4, 1.1, slabD + 0.4),
+      plainMat,
+    );
+    cap.position.set((lr - 1) * L * 0.06, h + 0.55, D * zr);
+    g.add(cap);
+  }
 
-  // 塔顶白色设备带
-  const cap = new THREE.Mesh(
-    new THREE.BoxGeometry(towerL, 1.2, Math.max(D * 0.9, 18) + 0.4),
-    plainMat,
-  );
-  cap.position.set(-L / 2 + towerL / 2, totalH + 0.6, 0);
-  g.add(cap);
-
-  attachBuildingData(g, b, totalH + 1.2);
+  attachBuildingData(g, b, Math.max(b.height, 28) + 1.1);
   return g;
 }
 

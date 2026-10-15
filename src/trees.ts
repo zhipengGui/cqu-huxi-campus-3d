@@ -59,9 +59,10 @@ function distPointSeg(px: number, py: number, ax: number, ay: number, bx: number
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-const DENSITY: Record<string, number> = { forest: 1 / 400, park: 1 / 800, grass: 1 / 1600 };
-const MAX_PER_AREA = 380;
-const MAX_TOTAL = 2800;
+const DENSITY: Record<string, number> = { forest: 1 / 300, park: 1 / 350, grass: 1 / 700 };
+const MAX_PER_AREA = 500;
+const MAX_TOTAL = 3500;
+const AVENUE_STEP = 14; // 行道树间距（米）
 
 // ---- 三种树冠模板（低模椭球团，单棵 ≤200 三角形）----
 
@@ -144,7 +145,7 @@ export function buildTrees(
     return false;
   }
 
-  // 采样布点
+  // 采样布点：绿地内散植
   const templates: Pt[][] = [[], [], []]; // 0 阔叶 / 1 小阔叶 / 2 棕榈
   let total = 0;
   for (const g of green) {
@@ -166,6 +167,40 @@ export function buildTrees(
       templates[ti].push([x, y]);
       accepted++;
       total++;
+    }
+  }
+
+  // 行道树：沿校园主路/次路两侧交替种植（path 级小路不种）
+  for (const r of roads) {
+    const k = r.kind;
+    if (k === "footway" || k === "path" || k === "steps" || k === "track" || k === "cycleway") continue;
+    const pts = r.pts;
+    if (pts.length < 2) continue;
+    const off = r.width / 2 + 3.5;
+    let acc = AVENUE_STEP * 0.5;
+    let n = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      const segLen = Math.hypot(x2 - x1, y2 - y1);
+      if (!segLen) continue;
+      const dx = (x2 - x1) / segLen;
+      const dy = (y2 - y1) / segLen;
+      while (acc < segLen) {
+        const px = x1 + dx * acc;
+        const py = y1 + dy * acc;
+        const side = n % 2 === 0 ? 1 : -1;
+        const tx = px - dy * off * side;
+        const ty = py + dx * off * side;
+        n++;
+        acc += AVENUE_STEP;
+        if (blocked(tx, ty)) continue;
+        const r2 = rng();
+        const ti = r2 < 0.7 ? 0 : r2 < 0.94 ? 1 : 2;
+        templates[ti].push([tx, ty]);
+        total++;
+      }
+      acc -= segLen;
     }
   }
   if (!total) return 0;
