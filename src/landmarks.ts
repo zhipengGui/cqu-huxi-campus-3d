@@ -111,6 +111,21 @@ function louverTexture(): THREE.CanvasTexture {
   });
 }
 
+/** 体育中心：红砖穿孔墙基座（参考实拍 work/refs/虎溪体育中心.jpg） */
+function brickTexture(): THREE.CanvasTexture {
+  return canvasTexture(128, 64, (g) => {
+    g.fillStyle = "#7e4636";
+    g.fillRect(0, 0, 128, 64);
+    g.fillStyle = "#9c5a45";
+    for (let y = 0; y < 64; y += 8) {
+      const off = (y / 8) % 2 === 0 ? 0 : 8;
+      for (let x = 0; x < 128; x += 16) {
+        g.fillRect(x + off, y, 14, 6.5);
+      }
+    }
+  });
+}
+
 export function attachBuildingData(root: THREE.Object3D, b: Building, height: number): void {
   const [cx, cy] = bboxCenter(b.polygon);
   root.traverse((o) => {
@@ -356,6 +371,78 @@ export function buildLikelou(b: Building): THREE.Group {
   g.add(cap);
 
   attachBuildingData(g, b, totalH + 1.2);
+  return g;
+}
+
+/** 体育馆（虎溪体育中心）：学位帽造型——红砖基座 + 收退玻璃带 + 钻石形大跨金属屋盖
+ *  （官方：总高 24.22m，上部方形屋盖悬挑、下部柔和曲线基座，2022 竣工） */
+export function buildGym(b: Building): THREE.Group {
+  const [cx, cy] = bboxCenter(b.polygon);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of b.polygon) {
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  const eastLong = x1 - x0 >= y1 - y0;
+  const L = Math.max(x1 - x0, y1 - y0);
+  const D = Math.min(x1 - x0, y1 - y0);
+  const baseH = 8.5;
+  const glassH = 2.2;
+  const roofH = 13.5; // 合计 ≈ 24.2m
+  const roofL = Math.min(L * 1.14, 100);
+  const roofD = Math.min(D * 1.18, 82);
+
+  const g = new THREE.Group();
+  g.position.set(cx, 0, -cy);
+  g.rotation.y = eastLong ? 0 : Math.PI / 2;
+
+  // 红砖基座（真实轮廓拉伸）
+  const brickTex = brickTexture();
+  brickTex.wrapS = THREE.RepeatWrapping;
+  brickTex.wrapT = THREE.RepeatWrapping;
+  brickTex.repeat.set(0.12, 0.4);
+  const brickMat = new THREE.MeshLambertMaterial({ map: brickTex });
+  const shape = new THREE.Shape(b.polygon.map(([x, y]) => new THREE.Vector2(x - cx, y - cy)));
+  for (const hole of b.holes) {
+    shape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x - cx, y - cy))));
+  }
+  const baseGeo = new THREE.ExtrudeGeometry(shape, { depth: baseH, bevelEnabled: false });
+  baseGeo.rotateX(-Math.PI / 2);
+  g.add(new THREE.Mesh(baseGeo, brickMat));
+
+  // 收退玻璃带
+  const inner = offsetPolygon(ccw(b.polygon), -1.4).map(([x, y]) => [x - cx, y - cy] as [number, number]);
+  const innerShape = new THREE.Shape(inner.map(([x, y]) => new THREE.Vector2(x, y)));
+  const glassGeo = new THREE.ExtrudeGeometry(innerShape, { depth: glassH, bevelEnabled: false });
+  glassGeo.rotateX(-Math.PI / 2);
+  glassGeo.translate(0, baseH, 0);
+  g.add(new THREE.Mesh(glassGeo, new THREE.MeshLambertMaterial({ color: GLASS })));
+
+  // 钻石形大跨屋盖（方形棱柱 + 顶部收分小台，竖条纹金属面）
+  const metalTex = finTexture("#c9cdcf", "#a8aeb2");
+  metalTex.wrapS = THREE.RepeatWrapping;
+  metalTex.wrapT = THREE.RepeatWrapping;
+  metalTex.repeat.set(24, 1);
+  const metalMat = new THREE.MeshLambertMaterial({ map: metalTex });
+  const rMain = (Math.max(roofL, roofD) / 2) / Math.SQRT2; // cylinder 半径=对角距，边=r√2
+  const roof = new THREE.Mesh(
+    new THREE.CylinderGeometry(rMain, rMain * 0.82, roofH, 4, 1),
+    metalMat,
+  );
+  roof.rotation.y = Math.PI / 4;
+  roof.scale.set(roofL / Math.max(roofL, roofD), 1, roofD / Math.max(roofL, roofD));
+  roof.position.y = baseH + glassH + roofH / 2;
+  g.add(roof);
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(rMain * 0.3, rMain * 0.62, 1.6, 4, 1),
+    new THREE.MeshLambertMaterial({ color: 0xd8dcde }),
+  );
+  cap.rotation.y = Math.PI / 4;
+  cap.scale.set(roofL / Math.max(roofL, roofD), 1, roofD / Math.max(roofL, roofD));
+  cap.position.y = baseH + glassH + roofH + 0.8;
+  g.add(cap);
+
+  attachBuildingData(g, b, baseH + glassH + roofH + 1.6);
   return g;
 }
 

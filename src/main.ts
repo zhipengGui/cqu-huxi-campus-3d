@@ -22,7 +22,7 @@ import {
 } from "./interact";
 import { initSearch, type SearchItem } from "./search";
 import { DayNight, type PresetName } from "./dayNight";
-import { buildActivity, buildGate, buildLikelou, buildLibrary, buildZonghe, gateLabel } from "./landmarks";
+import { buildActivity, buildGate, buildGym, buildLikelou, buildLibrary, buildZonghe, gateLabel } from "./landmarks";
 import { buildSportsMarks } from "./sports";
 import { Navigator } from "./navigation";
 import { collectPlaces, initPlacesPanel, type PlaceEntry, type PlacesPanel } from "./placesPanel";
@@ -281,6 +281,7 @@ async function loadScene(): Promise<void> {
   buildingsRef = buildings;
   const landmarkDefs = inside.filter((b) => b.landmark);
   const landmarkGroups = await Promise.all(landmarkDefs.map(async (b) => {
+    if (b.landmark === "gym") return buildGym(b); // 学位帽造型重做版（替代旧 gym.glb）
     const glb = await loadLandmarkGLB(b.landmark, b);
     if (glb) return glb;
     if (b.landmark === "library") return buildLibrary(b);
