@@ -12,6 +12,7 @@ import {
   buildPaving,
   buildRoads,
   buildWater,
+  waterMaterial,
 } from "./sceneBuilder";
 import { buildTrees } from "./trees";
 import { cancelFly, flyTo } from "./flyTo";import { LabelLayer } from "./labels";
@@ -692,6 +693,12 @@ let lastFrame = 0;
 renderer.setAnimationLoop((t) => {
   if (t - lastFrame < 15) return;
   lastFrame = t;
+  // 水面波纹缓慢流动
+  const ripple = waterMaterial.normalMap;
+  if (ripple) {
+    ripple.offset.x = (t * 0.000012) % 1;
+    ripple.offset.y = (t * 0.000007) % 1;
+  }
   controls.update();
   labels.update(camera);
   renderer.render(scene, camera);

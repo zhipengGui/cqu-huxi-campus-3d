@@ -159,26 +159,107 @@ export function buildPaving(parent: THREE.Object3D, paving: Area[]): void {
   flatAreaMeshes(geos, COLORS.paving, 0.015, parent);
 }
 
+/** 程序化水面波纹法线贴图（两方向正弦叠加的高度场 → Sobel 梯度法线） */
+function rippleNormalTexture(): THREE.CanvasTexture {
+  const s = 256;
+  const c = document.createElement("canvas");
+  c.width = s;
+  c.height = s;
+  const g = c.getContext("2d")!;
+  const img = g.createImageData(s, s);
+  const height = (u: number, v: number): number =>
+    Math.sin(u * Math.PI * 6 + Math.sin(v * Math.PI * 4) * 1.6) * 0.6 +
+    Math.sin(v * Math.PI * 8 + Math.sin(u * Math.PI * 5) * 1.2) * 0.4;
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s; x++) {
+      const u = x / s;
+      const v = y / s;
+      const e = 1 / s;
+      const dx = height(u + e, v) - height(u - e, v);
+      const dy = height(u, v + e) - height(u, v - e);
+      const nx = -dx * 1.4;
+      const ny = -dy * 1.4;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      const i = (y * s + x) * 4;
+      img.data[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      img.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      img.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+/** 水面材质（导出供渲染循环做波纹流动动画） */
+export const waterMaterial: THREE.MeshStandardMaterial = (() => {
+  const normalMap = rippleNormalTexture();
+  normalMap.repeat.set(1 / 26, 1 / 26); // ShapeGeometry uv 单位 = 米，约 26m 重复一波纹块
+  const m = new THREE.MeshStandardMaterial({
+    color: COLORS.water,
+    roughness: 0.3,
+    metalness: 0.28,
+    normalMap,
+    normalScale: new THREE.Vector2(0.35, 0.35),
+  });
+  m.name = "waterMat";
+  return m;
+})();
+
+/** 湖面：Standard 反光材质 + 波纹法线贴图；湖岸升级为砌石岸壁 + 压顶石 */
 export function buildWater(parent: THREE.Object3D, water: Area[]): void {
   const waterGeos: THREE.BufferGeometry[] = [];
-  const shoreGeos: THREE.BufferGeometry[] = [];
+  const wallGeos: THREE.BufferGeometry[] = [];
+  const curbGeos: THREE.BufferGeometry[] = [];
   for (const a of water) {
     for (const outer of a.outers) {
       const geo = new THREE.ShapeGeometry(shapeFromRings(outer, a.inners));
       geo.rotateX(-Math.PI / 2);
       waterGeos.push(geo);
-      // 沙色岸线：外扩 1.6m 环带
-      const ccw = ensureCCW(outer);
-      const ring = offsetPolygon(ccw, 1.6);
-      const shape = new THREE.Shape(ring.map(([x, y]) => new THREE.Vector2(x, y)));
-      shape.holes.push(new THREE.Path(outer.map(([x, y]) => new THREE.Vector2(x, y))));
-      const sg = new THREE.ShapeGeometry(shape);
-      sg.rotateX(-Math.PI / 2);
-      shoreGeos.push(sg);
+      // 砌石岸壁：外扩 0.9m 环带垂直挤出 0.55m（石色）
+      const ccwRing = ensureCCW(outer);
+      const outerRing = offsetPolygon(ccwRing, 0.9);
+      const wall = new THREE.Shape(outerRing.map(([x, y]) => new THREE.Vector2(x, y)));
+      wall.holes.push(new THREE.Path(ccwRing.map(([x, y]) => new THREE.Vector2(x, y))));
+      const wg = new THREE.ExtrudeGeometry(wall, { depth: 0.55, bevelEnabled: false });
+      wg.rotateX(-Math.PI / 2);
+      wallGeos.push(wg);
+      // 压顶石：外扩 0.9→1.5m 的环带平面（浅石色）
+      const curbRing = offsetPolygon(ccwRing, 1.5);
+      const curb = new THREE.Shape(curbRing.map(([x, y]) => new THREE.Vector2(x, y)));
+      curb.holes.push(new THREE.Path(outerRing.map(([x, y]) => new THREE.Vector2(x, y))));
+      const cg = new THREE.ShapeGeometry(curb);
+      cg.rotateX(-Math.PI / 2);
+      curbGeos.push(cg);
     }
   }
-  flatAreaMeshes(shoreGeos, COLORS.shore, 0.025, parent);
-  flatAreaMeshes(waterGeos, COLORS.water, 0.05, parent);
+  const stone = new THREE.MeshStandardMaterial({ color: 0xb0aca2, roughness: 0.9 });
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0xc6c2b6, roughness: 0.92 });
+  if (wallGeos.length) {
+    const merged = wallGeos.length === 1 ? wallGeos[0] : mergeGeometries(wallGeos)!;
+    const mesh = new THREE.Mesh(merged, stone);
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+  }
+  if (curbGeos.length) {
+    const merged = curbGeos.length === 1 ? curbGeos[0] : mergeGeometries(curbGeos)!;
+    const mesh = new THREE.Mesh(merged, curbMat);
+    mesh.position.y = 0.56;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+  }
+  if (waterGeos.length) {
+    const merged = waterGeos.length === 1 ? waterGeos[0] : mergeGeometries(waterGeos)!;
+    const mesh = new THREE.Mesh(merged, waterMaterial);
+    mesh.name = "water";
+    mesh.position.y = 0.05;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+  }
 }
 
 export function bboxCenter(pts: [number, number][]): [number, number] {
