@@ -23,6 +23,7 @@ import {
 import { initSearch, type SearchItem } from "./search";
 import { DayNight, type PresetName } from "./dayNight";
 import { buildActivity, buildGate, buildLibrary, gateLabel } from "./landmarks";
+import { buildSportsMarks } from "./sports";
 import { Navigator } from "./navigation";
 import { collectPlaces, initPlacesPanel, type PlaceEntry, type PlacesPanel } from "./placesPanel";
 import { PLACE_INFO } from "./placesInfo";
@@ -262,6 +263,7 @@ async function loadScene(): Promise<void> {
 
   buildGround(scene);
   buildGreen(gGreen, gSports, data.green);
+  buildSportsMarks(gSports, data.green);
   buildPaving(gRoads, data.paving);
   buildWater(gWater, data.water);
   buildRoads(gRoads, data.roads);
