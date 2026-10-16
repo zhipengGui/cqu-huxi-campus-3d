@@ -16,7 +16,7 @@ from mathutils.geometry import delaunay_2d_cdt
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'scripts'))
-from landmark_geometry import local_rings, contains, in_ring, signed_area
+from landmark_geometry import local_rings, contains, in_ring, signed_area, inset_ring
 
 
 class Model:
@@ -54,8 +54,16 @@ class Model:
 
     def ring(self, part,x,y,z,r,width,h,segments=48):
         for i in range(segments):
+            if part=='stone' and -.45<math.atan2(math.sin((i+.5)*math.tau/segments),math.cos((i+.5)*math.tau/segments))<.45:continue
             a=(i+.5)*math.tau/segments
             self.box(part,x+math.cos(a)*r,y+math.sin(a)*r,z,r*math.tau/segments+.03,width,h,a+math.pi/2)
+
+    def beam(self,part,a,b,width):
+        start,end=Vector(a),Vector(b);direction=end-start
+        rotation=direction.to_track_quat('Z','Y');center=(start+end)/2
+        points=[center+rotation@Vector((x*width/2,y*width/2,z*direction.length/2))
+                for x,y,z in [(-1,-1,-1),(1,-1,-1),(1,1,-1),(-1,1,-1),(-1,-1,1),(1,-1,1),(1,1,1),(-1,1,1)]]
+        for face in [(3,2,1,0),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7),(4,5,6,7)]:self.face(part,[points[i] for i in face])
 
 
 def material(name,color,rough=.8,metal=0):
@@ -67,7 +75,7 @@ def material(name,color,rough=.8,metal=0):
     return m
 
 
-def palette(style,detail):
+def palette(style,detail,asset=None):
     colors={
         'wall': ((.57,.53,.43) if style=='stone' else (.76,.75,.68)),
         'trim': ((.66,.62,.52) if style=='stone' else (.87,.86,.79)),
@@ -76,7 +84,17 @@ def palette(style,detail):
         'stone': (.59,.57,.48), 'water': (.10,.30,.32),
         'plant': (.17,.29,.12), 'screen': (.72,.73,.68)
     }
+    if asset in ('zonghe','teaching1','info'):
+        colors.update(glass=(.045,.10,.13),metal=(.14,.18,.19),roof=(.38,.40,.37),paving=(.42,.40,.33))
     mats={k:material(k,v,.24 if k=='glass' else .85,.12 if k in ('glass','metal','screen') else 0) for k,v in colors.items()}
+    if style=='stone':
+        mats['trim'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.40,.37,.30,1)
+    if style=='frame':
+        mats['wall'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.43,.46,.45,1)
+        mats['trim'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.65,.67,.63,1)
+    mats['court_terrace']=mats['paving'];mats['court_steps']=mats['stone'];mats['court_wall']=mats['stone']
+    mats['window_reveals']=mats['stone'];mats['entry_canopy']=mats['trim'];mats['entry_steps']=mats['stone']
+    mats['bridge_frames']=mats['trim'];mats['corridor_rails']=mats['metal']
     if style in ('library','rust','brick'):
         mats['wall'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.42,.15,.095,1)
         mats['trim'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.59,.27,.17,1)
@@ -100,15 +118,17 @@ def palette(style,detail):
     if style=='stone':
         rng=np.random.default_rng(81)
         pixels=np.ones((512,512,4),dtype=np.float32)
-        for row in range(32):
-            shift=(row%2)*8
-            for col in range(-1,33):
-                x0=max(0,col*16+shift); x1=min(512,col*16+shift+15)
-                y0=row*16; y1=y0+15
+        pixels[:,:,:3]=(.46,.44,.37)
+        y=0
+        while y<512:
+            h=int(rng.integers(11,25));x=-int(rng.integers(0,25));y1=min(512,y+h-1)
+            while x<512:
+                w=int(rng.integers(15,44));x0=max(0,x);x1=min(512,x+w-1)
                 if x1>x0:
-                    tone=rng.uniform(-.08,.09)
-                    pixels[y0:y1,x0:x1,:3]=np.array([.61,.57,.47])+tone+rng.uniform(-.025,.025,(y1-y0,x1-x0,1))
-            pixels[row*16+15,:,:3]=(.43,.42,.36)
+                    tone=rng.uniform(-.065,.075)
+                    pixels[y:y1,x0:x1,:3]=np.array([.63,.59,.49])+tone+rng.uniform(-.015,.015,(y1-y, x1-x0,1))
+                x+=w
+            y+=h
         im=bpy.data.images.new('stone_4m_tile',512,512)
         im.pixels.foreach_set(pixels.ravel()); im.pack()
         tex=mats['wall'].node_tree.nodes.new('ShaderNodeTexImage');tex.image=im
@@ -172,14 +192,17 @@ def facades(m,rings,H,levels,style,detail):
                     if style!='stone':
                         box('metal',t,-thickness+.10,z+wb+wh/2,.055,.085,wh)
                         box('metal',t,-thickness+.10,z+wb+wh*.48,win,.085,.055)
+                    else:
+                        for side in (-1,1):box('window_reveals',t+side*(win/2-.035),-.28,z+wb+wh/2,.07,.44,wh)
+                        box('window_reveals',t,-.28,z+wb+wh-.045,win,.44,.09)
                 if style=='frame':
-                    box('trim',j*bay,.14,z+fh/2,.17,.55,fh)
+                    box('trim',j*bay,.20,z+fh/2,.25,.75,fh)
                     # Screens vary by bay; distribution on unseen elevations is estimated.
                     if ri==0 and (j+2*f)%7 in (0,1):
                         box('screen',t,.33,z+wb+wh/2,win*.70,.12,wh)
                         if detail:
                             for k in range(6):box('metal',t-win*.30+k*win*.12,.405,z+wb+wh/2,.022,.025,wh*.9)
-            if style=='frame':box('trim',L/2,.12,z+.09,L,.65,.18)
+            if style=='frame':box('trim',L/2,.20,z+.13,L,.80,.26)
         box('trim',L/2,-.08,body+.22,L,.50,.44)
         if style=='frame':
             box('trim',L/2,.02,H-.12,L,.32,.24)
@@ -205,24 +228,44 @@ def point_segment(x,y,a,b):
     return math.hypot(x-a[0]-t*dx,y-a[1]-t*dy)
 
 
+def court_terrace(m,ring,style):
+    inner=inset_ring(ring,1.8);height=2.7 if style=='stone' else 3.0
+    m.surface('court_terrace',ring,[inner],height)
+    longest=max(range(len(inner)),key=lambda i:math.dist(inner[i],inner[(i+1)%len(inner)]))
+    sign=1 if signed_area(inner)>0 else -1
+    for i,a in enumerate(inner):
+        b=inner[(i+1)%len(inner)];length=math.dist(a,b);dx=(b[0]-a[0])/length;dy=(b[1]-a[1])/length;angle=math.atan2(dy,dx)
+        gaps=[]
+        if i==longest:
+            width=min(5.5,length*.18)
+            centers=[length/2] if style=='stone' else [length*.32,length*.68]
+            for center in centers:
+                gaps.append((center-width/2,center+width/2))
+                for j in range(12):
+                    run=(j+.5)*.30;rise=height*(12-j)/12
+                    m.box('court_steps',a[0]+dx*center-dy*sign*run,a[1]+dy*center+dx*sign*run,.10+rise/2,width,.32,rise,angle)
+        cuts=[0]+[p for gap in sorted(gaps) for p in gap]+[length]
+        for start,end in zip(cuts[::2],cuts[1::2]):
+            m.box('court_wall',a[0]+dx*(start+end)/2,a[1]+dy*(start+end)/2,height/2,end-start,.22,height,angle)
+
+
 def courtyard(m,ring,style,detail,index):
     m.surface('paving',ring,[],.10)
     p=interior_point(ring)
     if not p:return
     x,y,r=p
     if r<2.5:return
-    # Ground remains at z=0; raised terraces create the visible sunken datum.
+    # The courtyard floor stays above the map ground; a raised perimeter creates real level change.
+    if style in ('stone','frame') and index==0:court_terrace(m,ring,style)
     if style=='stone' and index==0:
         radius=min(4.2,r*.68)
         n=48 if detail else 24
         m.surface('water',[(x+math.cos(i*math.tau/n)*radius,y+math.sin(i*math.tau/n)*radius) for i in range(n)],[],.18)
         m.ring('stone',x,y,.43,radius+.2,.35,.60,n)
-        m.box('paving',x,y,.52,2*radius+.6,.8,.18)
+        m.box('paving',x+radius*.84,y,.52,radius*.72,.75,.18)
     elif style=='frame':
-        w=min(14,r*1.5);d=min(9,r)
-        for i in range(9):
-            m.box('stone',x,y+(i-4)*.38,.1+(9-i)*.15,w,.40,(9-i)*.30)
-        m.box('plant',x,y+2.5,1.3,w*.55,.8,.6)
+        w=min(14,r*1.5)
+        for side in (-1,1):m.box('plant',x+side*w*.7,y,.40,w*.35,2,.55)
         if detail:
             for s in (-1,1):m.box('metal',x+s*w/2,y,2.0,.06,3.8,.06)
     else:
@@ -265,7 +308,7 @@ def gym_model(m,rings,H,detail):
     for i in range(12):m.box('paving',0,-d/2-2.5+i*.35,.1+(i+1)*.13,17,.38,(i+1)*.26)
 
 
-def export_asset(asset, config, building, detail):
+def export_asset(asset, config, building, detail, preview=True):
     bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
     _,rings=local_rings(building['polygon'],building['holes'])
     model=Model();H=config['height'];style=config['style']
@@ -275,6 +318,16 @@ def export_asset(asset, config, building, detail):
     # Largest court first; all other OSM courts remain genuinely open.
     holes=sorted(rings[1:],key=lambda r:abs(signed_area(r)),reverse=True)
     for i,hole in enumerate(holes):courtyard(model,hole,style,detail,i)
+    if asset=='teaching1':
+        # Lake-facing entrance is a conservative detail; the exact doorway awaits a site photo.
+        edge=min((e for e in edges([rings[0]]) if e[3]>15),key=lambda e:(e[1][1]+e[2][1])/2)
+        _,a,b,L,dx,dy,nx,ny,angle=edge;cx=(a[0]+b[0])/2;cy=(a[1]+b[1])/2
+        model.box('entry_canopy',cx+nx*1.5,cy+ny*1.5,3.7,11.5,3.8,.30,angle)
+        for j in range(6):model.box('entry_steps',cx+nx*(1+j*.36),cy+ny*(1+j*.36),.10+(6-j)*.065,12,.40,(6-j)*.13,angle)
+        for side in (-1,1):model.box('trim',cx+dx*side*4.8+nx*2.5,cy+dy*side*4.8+ny*2.5,1.9,.25,.25,3.5)
+        if detail:
+            for _,a,b,L,dx,dy,nx,ny,angle in edges(rings[1:]):
+                for floor in range(1,config['levels']):model.box('corridor_rails',(a[0]+b[0])/2+nx*.1,(a[1]+b[1])/2+ny*.1,floor*H/config['levels']+.9,L,.055,.07,angle)
     if asset=='info':
         # North courtyard bridge, at the 35m OSM opening. Elevation estimated.
         cx,cy=(669.27-(587.01+752.61)/2,452.6-(385.35+471.05)/2)
@@ -282,8 +335,13 @@ def export_asset(asset, config, building, detail):
             model.box('glass',cx,cy,z,35.8,6.0,2.8)
             for j in range(10):model.box('trim',cx-18+j*4,cy,z,.20,6.4,3.0)
             model.box('trim',cx,cy,z-1.45,36.4,6.6,.22)
+        for side in (-1,1):
+            for j in range(9):
+                x0=cx-18+j*4;y0=cy+side*3.12
+                model.box('bridge_frames',x0,y0,H-5.9,.24,.28,9.2)
+                if detail:model.beam('bridge_frames',(x0,y0,H-10.2),(x0+4,y0,H-1.8),.15)
         model.box('trim',cx,cy,H-1.25,36.4,6.6,.3)
-    mats=palette(style,detail)
+    mats=palette(style,detail,asset)
     root=bpy.data.objects.new(asset,None);bpy.context.collection.objects.link(root)
     root['buildingId']=str(config['id']);root['heightEstimated']=not config['heightConfidence'].startswith('Official')
     root['sourceUrl']=config['reference']
@@ -337,6 +395,8 @@ def export_asset(asset, config, building, detail):
     render=ROOT/'work'/'render';render.mkdir(parents=True,exist_ok=True)
     if detail:
         bpy.ops.wm.save_as_mainfile(filepath=str(render/(asset+'.blend')))
+        if not preview:
+            print('PRIORITY_EXPORT',asset,'near',path.stat().st_size);return
         # EEVEE preview is for shape QA; browser GLB remains the final authority.
         scene=bpy.context.scene;scene.render.engine='CYCLES';scene.cycles.samples=12
         scene.render.resolution_x=1100;scene.render.resolution_y=760;scene.render.resolution_percentage=100
@@ -360,14 +420,14 @@ def export_asset(asset, config, building, detail):
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--asset',default='all');parser.add_argument('--far-only',action='store_true')
+    parser=argparse.ArgumentParser();parser.add_argument('--asset',default='all');parser.add_argument('--far-only',action='store_true');parser.add_argument('--no-preview',action='store_true')
     args=parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
     configs=json.loads((ROOT/'data'/'landmark_details.json').read_text(encoding='utf8'))
     buildings=json.loads((ROOT/'public'/'data'/'scene.json').read_text(encoding='utf8'))['buildings']
     for asset in ([key for key in configs if not key.startswith('_')] if args.asset=='all' else [args.asset]):
         cfg=configs[asset];b=next(b for b in buildings if str(b['id'])==str(cfg['id']))
         export_asset(asset,cfg,b,False)
-        if not args.far_only:export_asset(asset,cfg,b,True)
+        if not args.far_only:export_asset(asset,cfg,b,True,not args.no_preview)
 
 
 if __name__=='__main__':main()

@@ -22,7 +22,10 @@
       "wing heights",
       "courtyard depth 2.7m",
       "pool size and exact placement",
-      "unseen rear elevations"
+      "unseen rear elevations",
+      "raised courtyard perimeter 2.7m and stair placement",
+      "pool coping opening and short crossing",
+      "stone colour calibrated from available photo, not sampled material"
     ]
   },
   "teaching1": {
@@ -43,7 +46,9 @@
       "overall height",
       "window spacing",
       "unseen roof and rear",
-      "entrance position"
+      "entrance position",
+      "lake-facing entrance canopy and steps",
+      "courtyard railing layout; not verified from a complete elevation photo"
     ],
     "limitation": "Exterior detail reference incomplete; conservative representation, not a measured reconstruction"
   },
@@ -73,7 +78,8 @@
       "overall height",
       "bay spacing",
       "screen distribution on unseen walls",
-      "courtyard depth and exact bridge elevation"
+      "courtyard depth and exact bridge elevation",
+      "courtyard perimeter 3.0m, paired stairs and bridge frame distribution"
     ],
     "limitation": "30m crane lifting height is not the overall building height; bridge figures constrain only the reported component"
   },

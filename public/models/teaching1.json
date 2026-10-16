@@ -7,7 +7,7 @@
   "bounds": [
     [
       -124.78661795512647,
-      -53.38999895951644,
+      -56.585096751676545,
       0.0
     ],
     [
@@ -16,8 +16,8 @@
       16.34
     ]
   ],
-  "triangles": 125516,
-  "bytes": 860732,
+  "triangles": 126200,
+  "bytes": 869880,
   "materials": 8,
   "heightConfidence": "Five storeys officially documented; 3.3m storeys estimated"
 }

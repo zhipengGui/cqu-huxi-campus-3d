@@ -2,11 +2,23 @@
 import importlib.util
 import pathlib
 import unittest
+import json
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class LandmarkGeometryTests(unittest.TestCase):
+    def test_terraces_stay_inside_actual_courtyards(self):
+        from landmark_geometry import inset_ring, in_ring, signed_area
+        data=json.loads((ROOT/'public/data/scene.json').read_text(encoding='utf8'))
+        for b in data['buildings']:
+            if b['landmark'] not in ('zonghe','info'):continue
+            for ring in b['holes']:
+                for source in [ring,list(reversed(ring))]:
+                    inset=inset_ring(source,1.2)
+                    self.assertTrue(all(in_ring(p,ring) for p in inset), b['name'])
+                    self.assertLess(abs(signed_area(inset)),abs(signed_area(source)))
+
     def test_courtyard_and_world_alignment(self):
         path = ROOT / 'scripts' / 'landmark_geometry.py'
         self.assertTrue(path.exists(), 'landmark geometry with courtyard support is missing')

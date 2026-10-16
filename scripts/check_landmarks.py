@@ -23,6 +23,12 @@ for asset in args.assets:
         triangles=sum(gltf['accessors'][p['indices']]['count']//3 for mesh in gltf['meshes'] for p in mesh['primitives'])
         assert triangles==report['triangles'],f'{asset}: exported geometry differs from report ({triangles})'
         assert len(gltf.get('materials',[]))==report['materials']
+        if not suffix:
+            required={'zonghe':['court_terrace','court_steps','window_reveals'],
+                      'teaching1':['entry_canopy','entry_steps'],
+                      'info':['court_terrace','court_steps','bridge_frames']}.get(asset,[])
+            names={node['name'] for node in gltf['nodes'] if 'mesh' in node}
+            assert all(name in names for name in required),f'{asset}: missing modeled architectural parts {required}'
         assert report['roofCourtyardsOpen']
         if asset in ('zonghe','teaching1','info','likelou','gongke'):assert report['courtyards']>0
         assert report['bounds'][0][2]>=0, 'below global map ground'

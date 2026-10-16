@@ -49,7 +49,7 @@ try {
   await delay(2200);
   assert.ok(await evaluate(`document.querySelector('#pd-back').click();(()=>{const e=window.__huxi.detailAssets.find(e=>e.asset==='info');let correct=!!e.near;e.near?.traverse(m=>{if(m.isMesh)for(const mat of Array.isArray(m.material)?m.material:[m.material])if(mat.emissive)correct&&=mat.emissive.getHex()===0x0a1424;});return correct;})()`),'lazy near model must inherit night lighting');
   await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'2'}));document.querySelector('#tl-home').click();`);
-  for(const [name,label] of mobileOnly?[]:[['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼'],['library','图书馆'],['likelou','理科楼'],['gym','体育馆'],['activity','学生活动中心'],['gongke','工科大楼'],['gate_north','北门'],['gate_east','东门'],['gate_west','西门']]){
+  for(const [name,label] of (mobileOnly?[]:[['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼'],['library','图书馆'],['likelou','理科楼'],['gym','体育馆'],['activity','学生活动中心'],['gongke','工科大楼'],['gate_north','北门'],['gate_east','东门'],['gate_west','西门']]).slice(0,process.argv.includes('--priority-only')?3:undefined)){
     await evaluate(`document.querySelector('#pd-back').click(); [...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);
     await delay(2000);await capture('v8-'+name);
     checks[name]=await evaluate(`({title:document.querySelector('#pd-name').textContent, detail:window.__huxi.detailAssets.map(e=>({asset:e.asset,near:!!e.near,farVisible:e.far.visible})), calls:window.__huxi.renderer.info.render.calls,triangles:window.__huxi.renderer.info.render.triangles})`);

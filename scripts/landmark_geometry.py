@@ -17,6 +17,19 @@ def signed_area(ring):
     return sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(ring, ring[1:]+ring[:1]))/2
 
 
+def inset_ring(ring, width):
+    ring=clean_ring(ring);sign=1 if signed_area(ring)>0 else -1;out=[]
+    for i,p in enumerate(ring):
+        a,b=ring[i-1],ring[(i+1)%len(ring)]
+        d1=math.dist(a,p);d2=math.dist(p,b)
+        n1=(-(p[1]-a[1])/d1*sign,(p[0]-a[0])/d1*sign)
+        n2=(-(b[1]-p[1])/d2*sign,(b[0]-p[0])/d2*sign)
+        nx,ny=n1[0]+n2[0],n1[1]+n2[1];denom=max(.2,nx*n2[0]+ny*n2[1])
+        scale=min(width/denom,3*width/max(math.hypot(nx,ny),.001))
+        out.append((p[0]+nx*scale,p[1]+ny*scale))
+    return out
+
+
 def in_ring(p, ring):
     x, y = p
     hit = False
