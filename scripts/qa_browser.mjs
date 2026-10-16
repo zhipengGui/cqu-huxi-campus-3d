@@ -34,6 +34,9 @@ try {
   async function capture(name){await delay(1700);const r=await send('Page.captureScreenshot',{format:'png'});await writeFile(root+'/work/qa/'+name+'.png',Buffer.from(r.data,'base64'));}
   await capture('v8-campus');
   const checks={};
+  checks.context=await evaluate(`(()=>{const root=window.__huxi.scene.getObjectByName('context');let triangles=0,calls=0,shadows=false;root.traverse(o=>{if(o.isMesh){calls++;triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3;shadows||=o.castShadow||o.receiveShadow;}});return {...root.userData.metrics,calls,triangles,shadows};})()`);
+  assert.ok(checks.context.buildings>0&&checks.context.calls<=20&&checks.context.triangles<=50000&&!checks.context.shadows);
+  console.log('CONTEXT',JSON.stringify(checks.context));
   assert.ok(await evaluate(`(async()=>{
     const {BuildingPicker}=await import('/src/interact.ts');const h=window.__huxi,e=h.detailAssets.find(e=>e.asset==='zonghe');
     let mesh;e.far.traverse(m=>{if(m.isMesh&&!mesh)mesh=m;});

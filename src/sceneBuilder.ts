@@ -273,26 +273,6 @@ export function bboxCenter(pts: [number, number][]): [number, number] {
   return [(x0 + x1) / 2, (y0 + y1) / 2];
 }
 
-/** 校外背景楼：合并成单个素色网格（无标注、无拾取，仅作城市背景） */
-export function buildContextBuildings(parent: THREE.Object3D, buildings: Building[]): void {
-  if (!buildings.length) return;
-  const mat = new THREE.MeshLambertMaterial({ color: 0xd6d8ce, transparent: true, opacity: .48 });
-  const geos: THREE.BufferGeometry[] = [];
-  for (const b of buildings) {
-    const shape = shapeFromRings(b.polygon, b.holes);
-    const geo = new THREE.ExtrudeGeometry(shape, {
-      depth: Math.max(b.height, 2),
-      bevelEnabled: false,
-    });
-    geo.rotateX(-Math.PI / 2);
-    geos.push(geo);
-  }
-  const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos)!;
-  const mesh = new THREE.Mesh(merged, mat);
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-}
-
 /** 校区边界白线（返回线条对象，由调用方挂载并控制显隐） */
 export function buildBoundaryLine(boundary: { pts: [number, number][] }): THREE.LineLoop {
   const pts = boundary.pts.map(([x, y]) => new THREE.Vector3(x, 0.12, -y));

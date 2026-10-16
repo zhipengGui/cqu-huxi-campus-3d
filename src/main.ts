@@ -3,14 +3,14 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { boundsOf, frameBox, placeRoot } from "./landmarkViews";
-import { clipRoads, campusAreas, inCampus } from "./campusClip";
+import { clipRoads, campusAreas } from "./campusClip";
+import { buildContext } from "./context";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { SceneData, Building, Gate } from "./types";
 import {
   bboxCenter,
   buildBoundaryLine,
   buildBuildings,
-  buildContextBuildings,
   buildGreen,
   buildGround,
   buildPaving,
@@ -348,11 +348,7 @@ async function loadScene(): Promise<void> {
     campusBounds.max.y = 70;
   }
   const inside = data.buildings.filter((b) => b.inside);
-  const outside = data.buildings.filter((b) => !b.inside);
-  buildContextBuildings(gContext, outside.filter(b => {
-    const [x,y] = bboxCenterOfBuilding(b);
-    return !data.boundary || inCampus([x,y],data.boundary.pts) || data.boundary.pts.some(p => Math.hypot(p[0]-x,p[1]-y) < 110);
-  }));
+  gContext.add(buildContext(data));
   if (data.boundary) {
     boundaryLine = buildBoundaryLine(data.boundary);
     scene.add(boundaryLine);
@@ -490,7 +486,7 @@ const LAYER_DEFS: LayerDef[] = [
   { name: "道路与桥梁", desc: "车行道与步行道", get: () => gRoads.visible, set: (v) => { gRoads.visible = v; } },
   { name: "湖塘水面", desc: "缙湖、云湖等水面", get: () => gWater.visible, set: (v) => { gWater.visible = v; } },
   { name: "运动场地", desc: "田径场与球场", get: () => gSports.visible, set: (v) => { gSports.visible = v; } },
-  { name: "周边建筑", desc: "仅保留贴近校界的周边背景", get: () => gContext.visible, set: (v) => { gContext.visible = v; } },
+  { name: "周边环境", desc: "校界约200米内的简化建筑、道路与地表", get: () => gContext.visible, set: (v) => { gContext.visible = v; } },
 ];
 
 function renderLayers(): void {
