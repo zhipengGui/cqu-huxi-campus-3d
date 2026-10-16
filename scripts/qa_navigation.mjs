@@ -19,6 +19,7 @@ try{
   await evaluate(`document.querySelector('#tb-nav').click();document.querySelector('#nav-start').value='综合楼';document.querySelector('#nav-start').dispatchEvent(new Event('change'));document.querySelector('#nav-end').value='图书馆';document.querySelector('#nav-end').dispatchEvent(new Event('change'));document.querySelector('#nav-go').click()`);
   checks.route=await evaluate(`({status:document.querySelector('#nav-status').textContent,note:document.querySelector('#nav-note').textContent,distance:window.__huxi.navigation.result?.distanceMeters,points:window.__huxi.navigation.result?.points.length})`);
   assert.ok(checks.route.distance>100);assert.match(checks.route.note,/附近道路/);assert.match(checks.route.status,/路线.*m/);assert.ok(checks.route.points>2);await shot('v10-navigation-desktop');
+  assert.ok(await evaluate(`['start','end'].every(which=>document.querySelector('#nav-'+which).options[0].disabled)`),'placeholder options must not allow an empty selection while retaining an old endpoint');
   await evaluate(`document.querySelector('#nav-swap').click()`);
   assert.ok(await evaluate(`document.querySelector('#nav-start').value==='图书馆'&&document.querySelector('#nav-end').value==='综合楼'`),'swap must update both selectors');
   const swapped=await evaluate(`window.__huxi.navigation.result.distanceMeters`);assert.ok(Math.abs(swapped-checks.route.distance)<.001);
@@ -32,5 +33,48 @@ try{
   assert.ok(checks.mobile.left>=0&&checks.mobile.right<=390&&checks.mobile.bottom<=832&&checks.mobile.hiddenHud&&checks.mobile.goVisible);await shot('v10-navigation-mobile');
   await evaluate(`document.querySelector('#nav-exit').click()`);assert.ok(await evaluate(`getComputedStyle(document.querySelector('#hud')).display!=='none'`));
   checks.selectors=true;checks.detailNavigation=true;checks.swap=true;
+  if(process.argv.includes('--walking')){
+    await send('Emulation.setDeviceMetricsOverride',{width:1440,height:960,deviceScaleFactor:1,mobile:false});
+    await send('Page.reload',{ignoreCache:true});for(let i=0;i<120;i++){await delay(200);if(await evaluate(`!!window.__huxi?.walking&&document.querySelector('#boot').hidden`))break;}
+    await send('Page.bringToFront');
+    assert.ok(await evaluate(`!!document.querySelector('#tb-walk')&&!!window.__huxi.walking`),'desktop needs an explicit walking mode');
+    await evaluate(`document.querySelector('#tl-home').click();document.querySelector('#tb-walk').click()`);
+    const snapshot=await evaluate(`(()=>{const h=window.__huxi;return {position:h.camera.position.toArray(),target:h.controls.target.toArray(),fov:h.camera.fov,near:h.camera.near,far:h.camera.far,view:{...h.camera.view}}})()`);
+    async function clickButton(selector){const p=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...p});await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...p});}
+    await clickButton('#walk-start');await delay(600);
+    const lock=await evaluate(`({active:window.__huxi.walking.active,locked:document.pointerLockElement===window.__huxi.renderer.domElement,orbit:window.__huxi.controls.enabled,focus:document.hasFocus(),toast:document.querySelector('#toast').textContent,setupHidden:document.querySelector('#walk-setup').hidden})`);
+    assert.ok(lock.active&&lock.locked&&!lock.orbit,'walk must acquire a real pointer lock and suspend orbit: '+JSON.stringify({lock,errors}));
+    const initial=await evaluate(`window.__huxi.camera.position.toArray()`);
+    const sample=await evaluate(`({time:performance.now(),frame:window.__huxi.renderer.info.render.frame})`);
+    await send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyS',key:'s',windowsVirtualKeyCode:83});await delay(700);await send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyS',key:'s',windowsVirtualKeyCode:83});
+    const performanceSample=await evaluate(`({seconds:(performance.now()-${sample.time})/1000,fps:(window.__huxi.renderer.info.render.frame-${sample.frame})*1000/(performance.now()-${sample.time})})`);
+    const after=await evaluate(`window.__huxi.camera.position.toArray()`);assert.ok(Math.hypot(...after.map((v,i)=>v-initial[i]))>.1,'WASD must move on the mapped ground');assert.ok(Math.abs(after[1]-1.65)<.001);
+    await shot('v10-walking-zonghe');
+    await evaluate(`document.exitPointerLock()`);await delay(300);
+    const restored=await evaluate(`(()=>{const h=window.__huxi;return {active:h.walking.active,enabled:h.controls.enabled,position:h.camera.position.toArray(),target:h.controls.target.toArray(),fov:h.camera.fov,near:h.camera.near,far:h.camera.far,view:{...h.camera.view}}})()`);
+    assert.ok(!restored.active&&restored.enabled);for(const key of ['position','target'])assert.ok(restored[key].every((v,i)=>Math.abs(v-snapshot[key][i])<.001),'walk exit must restore '+key);
+    for(const key of ['fov','near','far'])assert.equal(restored[key],snapshot[key]);assert.deepEqual(restored.view,snapshot.view);
+    await evaluate(`document.querySelector('#tb-walk').click();window.__savedLock=window.__huxi.renderer.domElement.requestPointerLock;window.__huxi.renderer.domElement.requestPointerLock=()=>{throw Error('simulated lock refusal')};document.querySelector('#walk-start').click();window.__huxi.renderer.domElement.requestPointerLock=window.__savedLock`);
+    assert.ok(await evaluate(`!window.__huxi.walking.active&&window.__huxi.controls.enabled`),'lock failure must restore the map');
+    await evaluate(`document.querySelector('#tb-walk').click();document.querySelector('#walk-start').click();window.__huxi.walking.exit()`);await delay(350);
+    assert.ok(await evaluate(`!window.__huxi.walking.active&&!document.pointerLockElement&&window.__huxi.controls.enabled`),'exiting while pointer lock is pending must not leave the map mouse-locked');
+    await evaluate(`document.querySelector('#tb-walk').click();window.__huxi.renderer.domElement.requestPointerLock=()=>Promise.reject(Error('simulated async refusal'));document.querySelector('#walk-start').click();window.__huxi.renderer.domElement.requestPointerLock=window.__savedLock`);await delay(150);
+    assert.ok(await evaluate(`!window.__huxi.walking.active&&window.__huxi.controls.enabled`),'async lock rejection must restore the map without an unhandled Promise');
+    await delay(1900); // Let the intentional failure toast fade before visual captures.
+    checks.walking={realPointerLock:true,movementMeters:Math.hypot(...after.map((v,i)=>v-initial[i])),performanceSample,restored:true,lockFailureRecovery:true,pendingExitRecovery:true,asyncFailureRecovery:true,landmarks:[]};
+    for(const [name,key]of [['第一教学楼','teaching1'],['信息技术科研楼','info'],['图书馆','library']]){
+      await evaluate(`document.querySelector('#tb-walk').click();document.querySelector('#walk-spawn').value=${JSON.stringify(name)}`);await clickButton('#walk-start');await delay(650);
+      assert.ok(await evaluate(`window.__huxi.walking.active&&!!document.pointerLockElement`),'real walk entry: '+name);
+      const from=await evaluate(`window.__huxi.camera.position.toArray()`);
+      await send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyW',key:'w',windowsVirtualKeyCode:87});await delay(500);await send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyW',key:'w',windowsVirtualKeyCode:87});
+      const to=await evaluate(`window.__huxi.camera.position.toArray()`),movementMeters=Math.hypot(...to.map((v,i)=>v-from[i]));assert.ok(movementMeters>.1,'mapped movement near '+name);await shot('v10-walking-'+key);
+      if(key==='library'){
+        await send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:1,mobile:false});await delay(100);
+        assert.ok(await evaluate(`window.__huxi.walking.active&&window.__huxi.camera.near===.1&&!window.__huxi.camera.view.enabled`),'resize during walking must not restore orbit projection');
+      }
+      await evaluate(`window.dispatchEvent(new Event('blur'))`);await delay(200);assert.ok(await evaluate(`!window.__huxi.walking.active&&window.__huxi.controls.enabled&&!document.pointerLockElement`),'blur must release walking mode');checks.walking.landmarks.push({name,movementMeters});
+    }
+    assert.ok(await evaluate(`window.__huxi.camera.near===2&&window.__huxi.camera.view.fullWidth===innerWidth`),'exit after resize must reframe the restored map');
+  }
   assert.equal(errors.length,0,JSON.stringify(errors));await writeFile(root+'/work/qa/v10-navigation-check.json',JSON.stringify({errors,checks},null,2));console.log(JSON.stringify({errors,checks}));
 }finally{if(ws){try{await send('Browser.close');}catch{}ws.close();}browser.kill();}

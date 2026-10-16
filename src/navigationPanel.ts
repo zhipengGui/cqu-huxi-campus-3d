@@ -16,8 +16,9 @@ export function initNavigationPanel(nav:Navigator,places:SearchItem[],onRoute:()
   const get=<T extends HTMLElement>(id:string)=>document.querySelector<T>(id)!;
   for(const which of ['start','end'] as const){
     const select=get<HTMLSelectElement>('#nav-'+which);
+    select.options[0].disabled=true;
     for(const place of places.filter(p=>p.kind!=='water'))select.add(new Option(place.name,place.name));
-    select.addEventListener('change',()=>{const place=places.find(p=>p.name===select.value);if(place)nav.setPlace(which,place.name,place.target.x,place.target.z);});
+    select.addEventListener('change',()=>{const place=places.find(p=>p.name===select.value);if(place)nav.setPlace(which,place.name,place.target.x,place.target.z);refresh();});
     get('#nav-pick-'+which).addEventListener('click',()=>{nav.pickEndpoint=which;nav.onStatus(`点击道路或地点设置${which==='start'?'起点':'终点'}`);refresh();});
   }
   function refresh():void {

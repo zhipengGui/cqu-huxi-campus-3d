@@ -29,13 +29,14 @@ export class Navigator {
   snap(x:number,z:number,maxDistance=140):RoadSnap|null {return this.router.snap(x,-z,maxDistance);}
   setStart(x:number,z:number,label='地图起点',maxDistance=140):boolean {return this.setEndpoint('start',x,z,label,maxDistance);}
   setEnd(x:number,z:number,label='地图终点',maxDistance=140):boolean {return this.setEndpoint('end',x,z,label,maxDistance);}
-  private setEndpoint(which:'start'|'end',x:number,z:number,label:string,maxDistance:number):boolean {
+  private setEndpoint(which:'start'|'end',x:number,z:number,label:string,maxDistance:number,restart=false):boolean {
     const snap=this.snap(x,z,maxDistance);if(!snap){this.onStatus('附近没有道路，请点更靠近道路的位置');return false;}
+    if(restart)this.end=null;
     this[which]={snap,label};this.pickEndpoint=null;this.recompute();return true;
   }
   clickGround(x:number,z:number):void {
     if(this.pickEndpoint){this.setEndpoint(this.pickEndpoint,x,z,this.pickEndpoint==='start'?'地图起点':'地图终点',140);}
-    else if(this.result){this.clearRoute();this.setStart(x,z);}else if(!this.start)this.setStart(x,z);else this.setEnd(x,z);
+    else if(this.result)this.setEndpoint('start',x,z,'地图起点',140,true);else if(!this.start)this.setStart(x,z);else this.setEnd(x,z);
   }
   setEndBuilding(x:number,z:number,name='建筑'):void {
     this.setPlace('end',name,x,z);

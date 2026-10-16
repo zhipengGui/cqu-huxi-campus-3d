@@ -1,0 +1,48 @@
+{
+  "errors": [],
+  "checks": {
+    "route": {
+      "status": "路线 652 m · 步行约 8 分钟",
+      "note": "综合楼附近道路 → 图书馆附近道路",
+      "distance": 652.2353522048655,
+      "points": 30
+    },
+    "mobile": {
+      "left": 12,
+      "right": 378,
+      "top": 606,
+      "bottom": 820,
+      "hiddenHud": true,
+      "goVisible": true
+    },
+    "selectors": true,
+    "detailNavigation": true,
+    "swap": true,
+    "walking": {
+      "realPointerLock": true,
+      "movementMeters": 0.9798599999998278,
+      "performanceSample": {
+        "seconds": 0.705199999988079,
+        "fps": 59.55757232091602
+      },
+      "restored": true,
+      "lockFailureRecovery": true,
+      "pendingExitRecovery": true,
+      "asyncFailureRecovery": true,
+      "landmarks": [
+        {
+          "name": "第一教学楼",
+          "movementMeters": 0.6999999999999574
+        },
+        {
+          "name": "信息技术科研楼",
+          "movementMeters": 0.7001399999995814
+        },
+        {
+          "name": "图书馆",
+          "movementMeters": 0.7233800000000095
+        }
+      ]
+    }
+  }
+}

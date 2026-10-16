@@ -36,12 +36,19 @@ import { facadeTexture, roofMaterial } from "./facades";
 import {formatSharedView,parseSharedView,sharedDistanceScale} from './shareView';
 import {advanceFrame} from './frameTiming';
 import {initNavigationPanel} from './navigationPanel';
+import {WalkWorld} from './walkCollision';
+import {Walking} from './walking';
+import walkSpawns from '../data/walk_spawns.json';
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const statsEl = document.querySelector<HTMLDivElement>("#hud-stats")!;
 const navStatusEl = document.querySelector<HTMLDivElement>("#nav-status")!;
 const mobileLayout=window.matchMedia('(max-width:640px)');
 const hud=document.querySelector<HTMLElement>('#hud')!;
+let walking:Walking|null=null;
+let walkWorld:WalkWorld|null=null;
+let sceneData:SceneData|null=null;
+let walkViewport:[number,number]=[0,0];
 hud.classList.toggle('collapsed',mobileLayout.matches);
 document.querySelector('#hud-fold')!.setAttribute('aria-expanded',String(!mobileLayout.matches));
 
@@ -100,7 +107,7 @@ scene.add(labels.root);
 
 function resize(): void {
   camera.aspect = window.innerWidth / window.innerHeight;
-  camera.setViewOffset(window.innerWidth, window.innerHeight,
+  if(walking?.active)camera.clearViewOffset();else camera.setViewOffset(window.innerWidth, window.innerHeight,
     window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .20 : 0,
     window.innerWidth, window.innerHeight);
   camera.updateProjectionMatrix();
@@ -109,6 +116,7 @@ function resize(): void {
 }
 window.addEventListener("resize", () => {
   resize();
+  if(walking?.active)return;
   if(navMode&&routeNavigator?.result)focusRoute();
   else if (document.querySelector("#hud")!.classList.contains("detail-mode")) {
     if (flyTargetBuilding) focusBuilding(flyTargetBuilding, lastBuildingView);
@@ -368,6 +376,7 @@ function homeView(): void {
 }
 
 function selectPlace(it: SearchItem): void {
+  walking?.exit();
   if (navMode && routeNavigator) {
     routeNavigator.setPlace(routeNavigator.pickEndpoint??'end',it.name,it.target.x,it.target.z);
     return;
@@ -385,6 +394,7 @@ async function loadScene(): Promise<void> {
   const res = await fetch("data/scene.json");
   if (!res.ok) throw new Error("scene.json 加载失败 (HTTP " + res.status + ")");
   const data: SceneData = await res.json();
+  sceneData=data;
 
   buildGround(scene);
   if (data.boundary) {
@@ -435,6 +445,13 @@ async function loadScene(): Promise<void> {
   dayNight.apply("day");
 
   routeNavigator = new Navigator(scene, data.graph);
+  walkWorld=new WalkWorld(data);
+  walking=new Walking(camera,controls,renderer.domElement,walkWorld,(active,message)=>{
+    document.body.classList.toggle('walk-mode',active);picker?.setEnabled(!active);shadowDirty=true;
+    document.querySelector<HTMLElement>('#walk-setup')!.hidden=true;
+    if(message)showToast(message);
+    if(!active&&(walkViewport[0]!==innerWidth||walkViewport[1]!==innerHeight)){resize();if(selectedPlace)focusPlace(selectedPlace);else homeView();}
+  });
   routeNavigator.onStatus = (t) => {
     navStatusEl.textContent = t || (navMode ? "点击道路或地面设置起点" : "");
   };
@@ -751,12 +768,31 @@ document.querySelector('#pd-nav')!.addEventListener('click',()=>{
 
 // ---- 导航 ----
 const navBtn = document.querySelector<HTMLButtonElement>("#tb-nav")!;
+document.querySelector('#tb-walk')!.addEventListener('click',()=>{
+  if(mobileLayout.matches){showToast('步行漫游请使用电脑浏览器与鼠标。');return;}
+  const setup=document.querySelector<HTMLElement>('#walk-setup')!,select=document.querySelector<HTMLSelectElement>('#walk-spawn')!;
+  if(selectedPlace&&[...select.options].some(o=>o.value===selectedPlace!.name))select.value=selectedPlace.name;
+  setup.hidden=false;
+});
+document.querySelector('#walk-cancel')!.addEventListener('click',()=>{document.querySelector<HTMLElement>('#walk-setup')!.hidden=true;});
+document.querySelector('#walk-start')!.addEventListener('click',()=>{
+  if(mobileLayout.matches){document.querySelector<HTMLElement>('#walk-setup')!.hidden=true;showToast('步行漫游请使用电脑浏览器与鼠标。');return;}
+  if(!walking||!walkWorld||!routeNavigator||!sceneData)return;
+  const name=document.querySelector<HTMLSelectElement>('#walk-spawn')!.value,place=places.find(p=>p.name===name);if(!place)return;
+  const entry=walkSpawns.find(p=>p.name===name);
+  const spawn=entry&&walkWorld.findSpawn(entry.point as [number,number],sceneData.graph.nodes);
+  if(!spawn){showToast('附近没有安全步行点，请选择其他地点。');return;}
+  cancelFly();if(tour.on)setTour(false);if(navMode)setNavMode(false);walkViewport=[innerWidth,innerHeight];
+  walking.enter(spawn,entry.lookAt as [number,number]);
+});
+document.querySelector('#walk-exit')!.addEventListener('click',()=>walking?.exit());
 function focusRoute():void {
   const route=routeNavigator?.result;if(!route)return;
   const points=route.points.map(([x,y])=>new THREE.Vector3(x,.3,-y)),rect=mapRect(),direction=new THREE.Vector3(.28,1.45,1);
   const fit=framePoints(points,camera.fov,{width:innerWidth,height:innerHeight},rect,direction);composeRect(rect);flyTo(camera,controls,fit.target,Math.max(120,fit.distance),900,direction);
 }
 function setNavMode(v: boolean): void {
+  if(v)walking?.exit();
   navMode = v;
   document.body.classList.toggle('nav-mode',v);
   navBtn.classList.toggle("on", v);
@@ -780,6 +816,7 @@ document.querySelector<HTMLButtonElement>("#hud-fold")!.addEventListener("click"
   if (!document.querySelector("#hud")!.classList.contains("detail-mode")) homeView();
 });
 mobileLayout.addEventListener('change',()=>{
+  if(mobileLayout.matches){walking?.exit();document.querySelector<HTMLElement>('#walk-setup')!.hidden=true;}
   if(!hud.classList.contains('detail-mode')){hud.classList.toggle('collapsed',mobileLayout.matches);homeView();}
   document.querySelector('#hud-fold')!.setAttribute('aria-expanded',String(!hud.classList.contains('collapsed')));
 });
@@ -808,6 +845,7 @@ document.querySelector("#tl-compass")!.addEventListener("click", () => {
   camera.position.set(controls.target.x, controls.target.y + off.y, controls.target.z + horiz);
 });
 document.querySelector("#tl-home")!.addEventListener("click", () => {
+  walking?.exit();
   if(navMode)setNavMode(false);
   setTour(false);
   picker?.clearSelection();
@@ -872,6 +910,8 @@ document.querySelector("#tl-export")!.addEventListener("click", () => {
 
 // ---- 键盘快捷键 ----
 function escapeAll(): void {
+  if(walking?.active){walking.exit();return;}
+  if(!document.querySelector<HTMLElement>('#walk-setup')!.hidden){document.querySelector<HTMLElement>('#walk-setup')!.hidden=true;return;}
   if(document.querySelector('#tools')!.classList.contains('open')){document.querySelector('#tl-more')!.dispatchEvent(new Event('click'));}
   else if (navMode) setNavMode(false);
   else if (tour.on) setTour(false);
@@ -879,7 +919,8 @@ function escapeAll(): void {
 }
 window.addEventListener("keydown", (e) => {
   const t = e.target as HTMLElement;
-  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
+  if (t.tagName === "INPUT" || t.tagName === "TEXTAREA"||t.tagName==='SELECT') return;
+  if(walking?.active){if(e.key==='Escape')walking.exit();return;}
   const k = e.key.toLowerCase();
   if (k === "h") document.querySelector<HTMLButtonElement>("#tl-home")!.click();
   else if (k === "n") document.querySelector<HTMLButtonElement>("#tl-compass")!.click();
@@ -893,6 +934,7 @@ window.addEventListener("keydown", (e) => {
 
 // ---- 渲染循环（60fps 帽）----
 let lastFrame = 0;
+let lastWalkTime=0;
 const lastShadowTarget=new THREE.Vector3(Infinity,Infinity,Infinity);
 let lastShadowSize=-1;
 renderer.setAnimationLoop((t) => {
@@ -904,7 +946,8 @@ renderer.setAnimationLoop((t) => {
     ripple.offset.x = (t * 0.000012) % 1;
     ripple.offset.y = (t * 0.000007) % 1;
   }
-  controls.update();
+  const elapsed=lastWalkTime?(t-lastWalkTime)/1000:0;lastWalkTime=t;
+  if(walking?.active)walking.update(elapsed);else controls.update();
   updateDetailAssets();
   if (scene.fog instanceof THREE.Fog) {
     const distance = camera.position.distanceTo(controls.target);
@@ -925,7 +968,7 @@ renderer.setAnimationLoop((t) => {
 });
 
 // 调试入口（控制台用）
-Object.assign(window, { __huxi: { renderer, scene, camera, controls, detailAssets,get navigation(){return routeNavigator;} } });
+Object.assign(window, { __huxi: { renderer, scene, camera, controls, detailAssets,get navigation(){return routeNavigator;},get walking(){return walking;} } });
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-building-view]")) {
   button.addEventListener("click", () => focusBuilding(flyTargetBuilding, button.dataset.buildingView));

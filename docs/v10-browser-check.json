@@ -1,0 +1,794 @@
+{
+  "ready": true,
+  "errors": [],
+  "checks": {
+    "home": {
+      "inside": true,
+      "widthRatio": 0.8113325029800283
+    },
+    "context": {
+      "buildings": 19,
+      "roadSegments": 860,
+      "areas": 23,
+      "triangles": 7587,
+      "drawCalls": 4,
+      "radius": 200,
+      "calls": 4,
+      "shadows": false,
+      "surfaceIds": [
+        773911408,
+        777439004,
+        1061103596,
+        1177996154,
+        1199759497,
+        1199759500,
+        1199773111,
+        1199773112,
+        1199773113,
+        1199773114,
+        1199773115,
+        1199773116,
+        1199773117,
+        1199773118,
+        1199773119,
+        1199773120,
+        1199773121,
+        1199773122,
+        1199773123,
+        1199773124,
+        1313916673,
+        1446912539,
+        17784946
+      ]
+    },
+    "zonghe": {
+      "title": "综合楼",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gongke",
+          "near": false,
+          "farVisible": true
+        }
+      ],
+      "calls": 109,
+      "triangles": 638239
+    },
+    "teaching1": {
+      "title": "第一教学楼",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gongke",
+          "near": false,
+          "farVisible": true
+        }
+      ],
+      "calls": 140,
+      "triangles": 666406
+    },
+    "info": {
+      "title": "信息技术科研楼",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gongke",
+          "near": false,
+          "farVisible": true
+        }
+      ],
+      "calls": 119,
+      "triangles": 796045
+    },
+    "library": {
+      "title": "图书馆",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gongke",
+          "near": false,
+          "farVisible": true
+        }
+      ],
+      "calls": 152,
+      "triangles": 666742
+    },
+    "likelou": {
+      "title": "理科楼",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gongke",
+          "near": true,
+          "farVisible": false
+        }
+      ],
+      "calls": 109,
+      "triangles": 658584
+    },
+    "gym": {
+      "title": "体育馆",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gongke",
+          "near": true,
+          "farVisible": true
+        }
+      ],
+      "calls": 69,
+      "triangles": 600363
+    },
+    "activity": {
+      "title": "学生活动中心",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gongke",
+          "near": true,
+          "farVisible": false
+        }
+      ],
+      "calls": 155,
+      "triangles": 726778
+    },
+    "gongke": {
+      "title": "工科大楼",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gongke",
+          "near": true,
+          "farVisible": false
+        }
+      ],
+      "calls": 116,
+      "triangles": 658696
+    },
+    "gate_north": {
+      "title": "北门",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "gongke",
+          "near": true,
+          "farVisible": true
+        }
+      ],
+      "calls": 57,
+      "triangles": 523597
+    },
+    "gate_east": {
+      "title": "东门",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gongke",
+          "near": true,
+          "farVisible": true
+        }
+      ],
+      "calls": 93,
+      "triangles": 786265
+    },
+    "gate_west": {
+      "title": "西门",
+      "detail": [
+        {
+          "asset": "library",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "activity",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gym",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "info",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "likelou",
+          "near": true,
+          "farVisible": false
+        },
+        {
+          "asset": "teaching1",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "zonghe",
+          "near": true,
+          "farVisible": true
+        },
+        {
+          "asset": "gongke",
+          "near": true,
+          "farVisible": false
+        }
+      ],
+      "calls": 57,
+      "triangles": 374145
+    },
+    "views": {
+      "zonghe": {
+        "court": {
+          "targetError": 5.685035733124713e-14,
+          "elevation": 0.7938494419867469
+        },
+        "facade": 0.32461722703211776
+      },
+      "teaching1": {
+        "court": {
+          "targetError": 0,
+          "elevation": 0.7938494419867468
+        },
+        "facade": 0.3246172270321178
+      },
+      "info": {
+        "court": {
+          "targetError": 0,
+          "elevation": 0.7938494419867467
+        },
+        "facade": 0.3246172270321178
+      }
+    },
+    "geometry": {
+      "reports": [
+        {
+          "asset": "info",
+          "roofTriangles": 20,
+          "covered": 0
+        },
+        {
+          "asset": "likelou",
+          "roofTriangles": 36,
+          "covered": 0
+        },
+        {
+          "asset": "teaching1",
+          "roofTriangles": 60,
+          "covered": 0
+        },
+        {
+          "asset": "zonghe",
+          "roofTriangles": 74,
+          "covered": 0
+        },
+        {
+          "asset": "gongke",
+          "roofTriangles": 45,
+          "covered": 0
+        }
+      ],
+      "graphNodes": 2671,
+      "graphEdges": 2986,
+      "landmarks": 8
+    },
+    "search": true,
+    "layers": true,
+    "navigation": "路线 571 m · 步行约 7 分钟",
+    "performance": {
+      "fps": 59.994545950286884,
+      "pixelRatio": 1
+    },
+    "mobileHome": {
+      "inside": true,
+      "widthRatio": 0.8034175171800939
+    },
+    "mobileList": {
+      "listBottom": 724,
+      "toolbarTop": 734
+    },
+    "mobile": {
+      "zonghe": {
+        "points": [
+          [
+            154.74802584989874,
+            183.6962268841721
+          ],
+          [
+            55.69217338733616,
+            250.47348201036263
+          ],
+          [
+            154.22348316767648,
+            164.98024861299282
+          ],
+          [
+            53.64804071613255,
+            230.37907219223143
+          ],
+          [
+            333.64451206374576,
+            247.59508129559526
+          ],
+          [
+            246.38588085522693,
+            332.43736518646057
+          ],
+          [
+            335.669083341641,
+            227.55571607555044
+          ],
+          [
+            247.2438315864871,
+            310.94143097933426
+          ]
+        ],
+        "hudTop": 414.890625,
+        "flyBottom": 773.953125,
+        "flyTop": 738.953125,
+        "scrollable": "auto"
+      },
+      "teaching1": {
+        "points": [
+          [
+            122.86401472287666,
+            200.85074318114286
+          ],
+          [
+            45.85327706456502,
+            250.50483291087542
+          ],
+          [
+            122.12815679597097,
+            186.17069256154045
+          ],
+          [
+            44.189016083712055,
+            235.00083354426107
+          ],
+          [
+            352.769458016833,
+            284.29832245592075
+          ],
+          [
+            287.47104600722105,
+            351.62978453530064
+          ],
+          [
+            354.632918248994,
+            268.28653595299176
+          ],
+          [
+            288.6837428688783,
+            334.7345394584975
+          ]
+        ],
+        "hudTop": 454.9375,
+        "flyBottom": 747,
+        "flyTop": 712,
+        "scrollable": "auto"
+      },
+      "info": {
+        "points": [
+          [
+            137.95082661542742,
+            193.48058625757676
+          ],
+          [
+            60.8550133574909,
+            245.30805395093185
+          ],
+          [
+            136.72613262280228,
+            162.85895564965813
+          ],
+          [
+            57.69626801368711,
+            212.93997602068245
+          ],
+          [
+            333.6548484915163,
+            265.4577805837756
+          ],
+          [
+            266.54926569075633,
+            332.64341594004776
+          ],
+          [
+            337.0322273841384,
+            232.46581437974393
+          ],
+          [
+            268.4862021513506,
+            297.7953673941595
+          ]
+        ],
+        "hudTop": 414.890625,
+        "flyBottom": 773.953125,
+        "flyTop": 738.953125,
+        "scrollable": "auto"
+      },
+      "library": {
+        "points": [
+          [
+            171.09846557060644,
+            226.94906809739035
+          ],
+          [
+            73.52915809812963,
+            299.50197011605195
+          ],
+          [
+            169.38820034505903,
+            127.2763251512183
+          ],
+          [
+            63.66379167612854,
+            192.2638689253543
+          ],
+          [
+            313.05890795740197,
+            281.1449062796962
+          ],
+          [
+            224.74075400600765,
+            368.8869408465159
+          ],
+          [
+            322.3566407752323,
+            175.71047412268095
+          ],
+          [
+            227.43585410454574,
+            255.5195875944513
+          ]
+        ],
+        "hudTop": 414.890625,
+        "flyBottom": 751.859375,
+        "flyTop": 716.859375,
+        "scrollable": "auto"
+      }
+    }
+  }
+}

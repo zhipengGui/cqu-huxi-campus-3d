@@ -26,7 +26,7 @@ try {
   await send('Page.enable');await send('Runtime.enable');await send('Log.enable');
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:960,deviceScaleFactor:1,mobile:false});
   await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
-  await send('Page.navigate',{url:'http://localhost:5188/'});
+  await send('Page.navigate',{url:process.env.HUXI_PREVIEW_URL??'http://localhost:5188/'});
   let ready=false;
   for(let i=0;i<80;i++){await delay(300);ready=await evaluate('!!window.__huxi && document.querySelector("#hud-stats").textContent.startsWith("楼栋")');if(ready)break;}
   if(!ready)throw Error('Map not ready: '+await evaluate('document.body.innerText.slice(-1800)'));
@@ -67,7 +67,7 @@ try {
     await capture('v9-'+asset+'-courtyard');
     await evaluate(`document.querySelector('[data-building-view=facade]').click()`);
     const facade=await evaluate(`(()=>{const h=window.__huxi,d=h.camera.position.clone().sub(h.controls.target);return d.y/d.length();})()`);
-    assert.ok(facade>0&&facade<.5,'facade view must lower the camera');checks.views[asset]={court,facade};
+    assert.ok(facade>0&&facade<.5,'facade view must lower the camera: '+JSON.stringify({asset,facade}));checks.views[asset]={court,facade};
   }
   checks.geometry=await evaluate(`(async()=>{
     const data=await(await fetch('data/scene.json')).json(),h=window.__huxi;
@@ -112,7 +112,9 @@ try {
   // Choose actual unobstructed pixels so the regression survives camera changes.
   await clickMap(navPoints.building);
   assert.doesNotMatch(await evaluate(`document.querySelector('#nav-status').textContent`),/路线/,'one building click must not create a route');
-  await clickMap(navPoints.ground);await clickMap(navPoints.building);
+  // Destination-first navigation previews as soon as the ground start is chosen.
+  // Its camera then moves, so reusing pre-flight screen coordinates would hit a different place.
+  await clickMap(navPoints.ground);
   checks.navigation=await evaluate(`document.querySelector('#nav-status').textContent`);
   assert.match(checks.navigation,/路线.*m/);await evaluate(`document.querySelector('#nav-clear').click();document.querySelector('#nav-exit').click();`);
   checks.performance=await evaluate('new Promise(resolve=>{const t=performance.now(),f=window.__huxi.renderer.info.render.frame;setTimeout(()=>resolve({fps:(window.__huxi.renderer.info.render.frame-f)*1000/(performance.now()-t),pixelRatio:window.__huxi.renderer.getPixelRatio()}),2200)})');

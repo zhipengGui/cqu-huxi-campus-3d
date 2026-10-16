@@ -40,6 +40,7 @@ const SELECT_EMISSIVE = 0x101b17;
 const HOVER_EMISSIVE = 0x0a100d;
 
 export class BuildingPicker {
+  private enabled=true;
   private raycaster = new THREE.Raycaster();
   private pointerNdc = new THREE.Vector2();
   private downPos: [number, number] | null = null;
@@ -54,15 +55,17 @@ export class BuildingPicker {
     private cb: PickerCallbacks,
   ) {
     dom.addEventListener("pointerdown", (e) => {
+      if(!this.enabled)return;
       this.downPos = [e.clientX, e.clientY];
     });
     dom.addEventListener("pointerup", (e) => {
       const d = this.downPos;
       this.downPos = null;
-      if (!d) return;
+      if (!d||!this.enabled) return;
       if (Math.hypot(e.clientX - d[0], e.clientY - d[1]) < 6) this.pick(e.clientX, e.clientY);
     });
     dom.addEventListener("pointermove", (e) => {
+      if(!this.enabled)return;
       if (e.pointerType === "touch") return;
       this.pointerNdc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
       if (!this.hoverPending) {
@@ -108,6 +111,7 @@ export class BuildingPicker {
   }
 
   private updateHover(): void {
+    if(!this.enabled)return;
     const target = this.cast(this.pointerNdc.x, this.pointerNdc.y);
     if (!this.samePlace(target, this.hoverMesh)) {
       if (this.hoverMesh && !this.samePlace(this.hoverMesh, this.selectedMesh)) this.restore(this.hoverMesh);
@@ -130,6 +134,10 @@ export class BuildingPicker {
   }
 
   /** 搜索等外部入口直接选中某楼（只高亮，不触发回调——调用方自理界面） */
+  setEnabled(value:boolean):void {
+    this.enabled=value;this.downPos=null;
+    if(!value){if(this.hoverMesh)this.restore(this.hoverMesh);this.hoverMesh=null;this.dom.style.cursor='';}
+  }
   select(mesh: THREE.Mesh): void {
     this.clearSelection(false);
     this.selectedMesh = mesh;

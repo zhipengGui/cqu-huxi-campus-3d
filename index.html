@@ -143,6 +143,17 @@
     body.night .map-label.gate { color: #8fd6a5; background: rgba(16, 42, 28, 0.85); }
 
     #toolbar { display: flex; align-items: center; margin-top: 10px; }
+    #toolbar { gap:8px; }
+    #walk-setup { position:fixed; z-index:25; left:50%; top:50%; transform:translate(-50%,-50%); width:min(380px,calc(100vw - 32px)); box-sizing:border-box; padding:22px; background:var(--panel-bg); color:var(--text); border-radius:14px; box-shadow:0 8px 50px #142d3650; }
+    #walk-setup[hidden] { display:none; }
+    #walk-setup h2 { font-size:18px; margin:0 0 10px; }
+    #walk-setup p { font-size:13px; line-height:1.6; color:var(--muted); }
+    #walk-spawn { width:100%; padding:9px; border:1px solid var(--line); border-radius:7px; background:var(--panel-bg); color:var(--text); margin:6px 0 14px; }
+    #walk-start { background:#2d7d52; color:white; border:0; border-radius:7px; padding:9px 18px; cursor:pointer; }
+    #walk-hint { display:none; position:fixed; z-index:26; bottom:22px; left:50%; transform:translateX(-50%); background:var(--panel-bg); color:var(--text); border-radius:10px; padding:12px 18px; box-shadow:0 2px 16px #0003; font-size:13px; }
+    body.walk-mode #walk-hint { display:block; }
+    body.walk-mode #hud,body.walk-mode #tools,body.walk-mode #nav-panel,body.walk-mode #tour-bar { display:none!important; }
+    body.walk-mode .map-label { visibility:hidden; }
     .tb {
       padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px;
       background: rgba(127, 127, 127, 0.08); color: var(--muted); font-size: 12px; cursor: pointer;
@@ -318,6 +329,7 @@
       #hud.detail-mode #pd-photo { height: 90px; }
       #tab-places.on, #places { min-height: 0; }
       #toolbar { flex: none; }
+      #tb-walk { display:none; }
       #tour-bar { top: 58px; bottom: auto; width: calc(100vw - 24px); box-sizing: border-box; flex-wrap: wrap; gap: 6px; }
       #tour-desc, #tour-timer { display: none; }
       #tools { top:12px; right:12px; transform:none; flex-direction:row; flex-wrap:wrap; width:116px; gap:4px; justify-content:flex-end; }
@@ -413,6 +425,7 @@
 
       <div id="toolbar">
         <button id="tb-nav" class="tb" type="button">导航</button>
+        <button id="tb-walk" class="tb" type="button">步行漫游</button>
       </div>
       <div id="hud-stats" class="muted">正在加载场景数据…</div>
       <div class="muted hint">左键旋转 · 滚轮缩放 · 右键平移 · 点楼看信息</div>
@@ -458,6 +471,8 @@
       <button id="nav-exit" type="button">退出导航</button>
     </div>
   </div>
+  <div id="walk-setup" hidden role="dialog" aria-labelledby="walk-title"><h2 id="walk-title">在虎溪走一走</h2><p>电脑端使用鼠标查看，WASD 移动，Esc 返回原视角。当前开放已映射道路与广场，地面及入口为示意。</p><label for="walk-spawn">从这里开始</label><select id="walk-spawn"><option>综合楼</option><option>第一教学楼</option><option>信息技术科研楼</option><option>图书馆</option></select><button id="walk-start" type="button">开始步行</button> <button id="walk-cancel" class="tb" type="button">取消</button></div>
+  <div id="walk-hint">步行漫游 · WASD 移动 · 鼠标查看 · Esc 返回地图 <button id="walk-exit" class="tb" type="button">退出</button></div>
   <div id="info-card">
     <div id="ic-title"></div>
     <div class="row"><span class="k">类型</span><span id="ic-type"></span></div>

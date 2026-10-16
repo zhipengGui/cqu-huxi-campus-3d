@@ -29,9 +29,8 @@ export class RoadRouter {
     graph.edges.forEach(([a,b,cost],edge)=>{
       if(!graph.nodes[a]||!graph.nodes[b]||!Number.isFinite(cost)||cost<0||a===b)return;
       const length=Math.hypot(graph.nodes[b][0]-graph.nodes[a][0],graph.nodes[b][1]-graph.nodes[a][1]);
-      if(!length)return;
-      this.validEdges.add(edge);
-      this.heuristicScale=Math.min(this.heuristicScale,cost/length);
+      // Co-located distinct nodes can bridge graph components, but cannot be snapped onto.
+      if(length){this.validEdges.add(edge);this.heuristicScale=Math.min(this.heuristicScale,cost/length);}
       this.adjacency[a].push({to:b,cost,edge});this.adjacency[b].push({to:a,cost,edge});
     });
   }
