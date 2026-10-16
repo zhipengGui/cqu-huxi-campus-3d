@@ -35,6 +35,7 @@ import { TOUR_STOPS } from "./tourStops";
 import { facadeTexture, roofMaterial } from "./facades";
 import {formatSharedView,parseSharedView,sharedDistanceScale} from './shareView';
 import {advanceFrame} from './frameTiming';
+import {initNavigationPanel} from './navigationPanel';
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const statsEl = document.querySelector<HTMLDivElement>("#hud-stats")!;
@@ -108,7 +109,8 @@ function resize(): void {
 }
 window.addEventListener("resize", () => {
   resize();
-  if (document.querySelector("#hud")!.classList.contains("detail-mode")) {
+  if(navMode&&routeNavigator?.result)focusRoute();
+  else if (document.querySelector("#hud")!.classList.contains("detail-mode")) {
     if (flyTargetBuilding) focusBuilding(flyTargetBuilding, lastBuildingView);
     else if (selectedPlace) focusPlace(selectedPlace);
   } else homeView();
@@ -125,7 +127,7 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
 renderer.domElement.addEventListener("pointerup", (e) => {
   const d = downAt;
   downAt = null;
-  if (!d || !navMode || !navigator) return;
+  if (!d || !navMode || !routeNavigator) return;
   const maxMove = e.pointerType === "touch" ? 10 : 6;
   if (Math.hypot(e.clientX - d[0], e.clientY - d[1]) > maxMove) return;
   // The building picker owns building taps; do not also set the ground behind it.
@@ -135,13 +137,13 @@ renderer.domElement.addEventListener("pointerup", (e) => {
     camera,
   );
   const pt = new THREE.Vector3();
-  if (raycaster.ray.intersectPlane(groundPlane, pt)) navigator.clickGround(pt.x, pt.z);
+  if (raycaster.ray.intersectPlane(groundPlane, pt)) routeNavigator.clickGround(pt.x, pt.z);
 });
 
 // ---- 信息卡（已并入面板详情模式；此处仅保留导航面板状态）----
 let dayNight: DayNight | null = null;
 let picker: BuildingPicker | null = null;
-let navigator: Navigator | null = null;
+let routeNavigator: Navigator | null = null;
 let navMode = false;
 let panel: PlacesPanel | null = null;
 let places: PlaceEntry[] = [];
@@ -338,8 +340,9 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
 function mapRect() {
   const width=window.innerWidth,height=window.innerHeight,panel=hud.getBoundingClientRect();
   const brand=document.querySelector('#brand')!.getBoundingClientRect();
-  return width>640?{left:hud.classList.contains('collapsed')?24:panel.right+20,right:width-72,top:brand.bottom+18,bottom:height-24}
-    :{left:12,right:width-12,top:Math.max(brand.bottom+16,72),bottom:Math.min(height-24,panel.top-16)};
+  const bottom=navMode?document.querySelector('#nav-panel')!.getBoundingClientRect().top-16:height-24;
+  return width>640?{left:hud.classList.contains('collapsed')?24:panel.right+20,right:width-72,top:brand.bottom+18,bottom:Math.min(height-24,bottom)}
+    :{left:12,right:width-12,top:Math.max(brand.bottom+16,72),bottom:navMode?bottom:Math.min(height-24,panel.top-16)};
 }
 function composeRect(rect:ReturnType<typeof mapRect>):void {
   camera.setViewOffset(innerWidth,innerHeight,innerWidth/2-(rect.left+rect.right)/2,innerHeight/2-(rect.top+rect.bottom)/2,innerWidth,innerHeight);
@@ -365,9 +368,8 @@ function homeView(): void {
 }
 
 function selectPlace(it: SearchItem): void {
-  if (navMode && navigator) {
-    navigator.setEndBuilding(it.target.x, it.target.z,it.name);
-    flyTo(camera, controls, it.target, it.distance);
+  if (navMode && routeNavigator) {
+    routeNavigator.setPlace(routeNavigator.pickEndpoint??'end',it.name,it.target.x,it.target.z);
     return;
   }
   if (it.mesh) picker?.select(it.mesh);
@@ -432,8 +434,8 @@ async function loadScene(): Promise<void> {
   dayNight = new DayNight(scene, hemi, sun, buildings);
   dayNight.apply("day");
 
-  navigator = new Navigator(scene, data.graph);
-  navigator.onStatus = (t) => {
+  routeNavigator = new Navigator(scene, data.graph);
+  routeNavigator.onStatus = (t) => {
     navStatusEl.textContent = t || (navMode ? "点击道路或地面设置起点" : "");
   };
 
@@ -447,6 +449,7 @@ async function loadScene(): Promise<void> {
     if (!byName.has(d.name)) byName.set(d.name, mesh);
   });
   places = collectPlaces({...data, water: campusWater,green:campusGreen}, byName);
+  initNavigationPanel(routeNavigator,places,focusRoute);
   tourStops = TOUR_STOPS.map((s) => places.find((p) => p.name === s.name)).filter(
     (p): p is PlaceEntry => !!p,
   );
@@ -460,9 +463,9 @@ async function loadScene(): Promise<void> {
 
   picker = new BuildingPicker(renderer.domElement, camera, buildings, {
     onSelect: (mesh) => {
-      if (navMode && navigator) {
+      if (navMode && routeNavigator) {
         const d = mesh.userData as BuildingUserData;
-        navigator.setEndBuilding(d.cx, d.cy,d.name);
+        routeNavigator.setPlace(routeNavigator.pickEndpoint??'end',d.name,d.cx,d.cy);
         return;
       }
       const entry = places.find((p) => p.mesh === mesh || p.name === (mesh.userData as BuildingUserData).name);
@@ -742,14 +745,23 @@ document.querySelector("#pd-fly")!.addEventListener("click", () => {
   if (flyTargetBuilding) focusBuilding(flyTargetBuilding);
   else if (selectedPlace) focusPlace(selectedPlace);
 });
+document.querySelector('#pd-nav')!.addEventListener('click',()=>{
+  const place=selectedPlace;if(!place)return;setNavMode(true);routeNavigator?.setPlace('end',place.name,place.target.x,place.target.z);
+});
 
 // ---- 导航 ----
 const navBtn = document.querySelector<HTMLButtonElement>("#tb-nav")!;
+function focusRoute():void {
+  const route=routeNavigator?.result;if(!route)return;
+  const points=route.points.map(([x,y])=>new THREE.Vector3(x,.3,-y)),rect=mapRect(),direction=new THREE.Vector3(.28,1.45,1);
+  const fit=framePoints(points,camera.fov,{width:innerWidth,height:innerHeight},rect,direction);composeRect(rect);flyTo(camera,controls,fit.target,Math.max(120,fit.distance),900,direction);
+}
 function setNavMode(v: boolean): void {
   navMode = v;
+  document.body.classList.toggle('nav-mode',v);
   navBtn.classList.toggle("on", v);
   document.querySelector("#nav-panel")!.classList.toggle("open", v);
-  navigator?.setActive(v);
+  routeNavigator?.setActive(v);
   if (v) {
     if (tour.on) setTour(false);
     closeDetail();
@@ -758,7 +770,7 @@ function setNavMode(v: boolean): void {
   navBtn.blur();
 }
 navBtn.addEventListener("click", () => setNavMode(!navMode));
-document.querySelector("#nav-clear")!.addEventListener("click", () => navigator?.clearRoute());
+document.querySelector("#nav-clear")!.addEventListener("click", () => routeNavigator?.clearRoute());
 document.querySelector("#nav-exit")!.addEventListener("click", () => setNavMode(false));
 
 // ---- 折叠 ----
@@ -796,6 +808,7 @@ document.querySelector("#tl-compass")!.addEventListener("click", () => {
   camera.position.set(controls.target.x, controls.target.y + off.y, controls.target.z + horiz);
 });
 document.querySelector("#tl-home")!.addEventListener("click", () => {
+  if(navMode)setNavMode(false);
   setTour(false);
   picker?.clearSelection();
   if(mobileLayout.matches){hud.classList.add('collapsed');document.querySelector('#hud-fold')!.setAttribute('aria-expanded','false');}
@@ -912,7 +925,7 @@ renderer.setAnimationLoop((t) => {
 });
 
 // 调试入口（控制台用）
-Object.assign(window, { __huxi: { renderer, scene, camera, controls, detailAssets } });
+Object.assign(window, { __huxi: { renderer, scene, camera, controls, detailAssets,get navigation(){return routeNavigator;} } });
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-building-view]")) {
   button.addEventListener("click", () => focusBuilding(flyTargetBuilding, button.dataset.buildingView));

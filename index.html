@@ -122,6 +122,15 @@
       text-align: center;
     }
     #nav-panel.open { display: block; }
+    #nav-panel { left:calc(50% + 130px); width:min(580px,calc(100vw - 420px)); box-sizing:border-box; max-height:45dvh; overflow:auto; }
+    #nav-fields { display:grid; grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr); align-items:center; gap:8px; margin-bottom:9px; text-align:left; }
+    .nav-field { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px; }
+    .nav-field label { grid-column:1 / -1; font-size:11px; color:var(--muted); }
+    .nav-field select { min-width:0; width:100%; border:1px solid var(--line); border-radius:7px; padding:7px; background:var(--panel-bg); color:var(--text); font:inherit; }
+    #nav-fields button { border:1px solid var(--line); border-radius:7px; color:var(--text); background:transparent; padding:5px; cursor:pointer; }
+    #nav-fields button.on { background:#2d7d5230; }
+    #nav-note,#nav-turns { font-size:11px; color:var(--muted); margin:6px 0; overflow-wrap:anywhere; }
+    #nav-actions #nav-go { background:#2d7d52; color:white; border-color:#2d7d52; }
     #nav-status { font-weight: 600; margin-bottom: 8px; min-width: 200px; }
     #nav-actions { display: flex; gap: 8px; justify-content: center; }
     #nav-actions button {
@@ -301,6 +310,11 @@
       #brand h1 { font-size:15px; letter-spacing:1px; }
       #brand small { font-size:10px; }
       #hud { width: auto; left:12px; right: 12px; max-height: 48dvh; top:auto; bottom:24px; }
+      body.nav-mode #hud { display:none; }
+      #nav-panel { left:12px; right:12px; width:auto; transform:none; bottom:24px; padding:12px; max-height:50dvh; }
+      #nav-fields { grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr); gap:4px; }
+      .nav-field { grid-template-columns:minmax(0,1fr); }
+      .nav-field select { font-size:12px; padding:7px 4px; }
       #hud.detail-mode #pd-photo { height: 90px; }
       #tab-places.on, #places { min-height: 0; }
       #toolbar { flex: none; }
@@ -394,6 +408,7 @@
         <p id="pd-desc"></p>
         <div class="building-views"><button type="button" data-building-view="overview">鸟瞰</button><button type="button" data-building-view="facade">立面</button><button type="button" data-building-view="court">近景</button></div>
         <button id="pd-fly" type="button">前往此处</button>
+        <button id="pd-nav" class="tb" type="button">导航到这里</button>
       </div>
 
       <div id="toolbar">
@@ -430,8 +445,15 @@
     <button id="tl-more" type="button" title="更多地图工具" aria-expanded="false">···</button>
   </div>
   <div id="nav-panel">
+    <div id="nav-fields">
+      <div class="nav-field"><label for="nav-start">起点</label><select id="nav-start"><option value="">选择起点</option><option value="@map" disabled>地图选点（已设置）</option></select><button id="nav-pick-start" type="button">地图选点</button></div>
+      <button id="nav-swap" type="button" title="交换起点和终点" aria-label="交换起点和终点">⇄</button>
+      <div class="nav-field"><label for="nav-end">终点</label><select id="nav-end"><option value="">选择终点</option><option value="@map" disabled>地图选点（已设置）</option></select><button id="nav-pick-end" type="button">地图选点</button></div>
+    </div>
     <div id="nav-status">点击道路或地面设置起点</div>
+    <div id="nav-note"></div><div id="nav-turns"></div>
     <div id="nav-actions">
+      <button id="nav-go" type="button">开始导航</button>
       <button id="nav-clear" type="button">清除路线</button>
       <button id="nav-exit" type="button">退出导航</button>
     </div>

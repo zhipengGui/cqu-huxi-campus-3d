@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {Navigator} from '../src/navigation.ts';
 import {RoadRouter,type RoadSnap} from '../src/routing.ts';
 import {existsSync,readFileSync} from 'node:fs';
+import {routeTurns} from '../src/navigationPanel.ts';
 
 const graph={nodes:[[0,0],[100,0],[100,100],[200,100]] as [number,number][],edges:[[0,1,100],[1,2,100],[2,3,100]] as [number,number,number][]};
 const nav=new Navigator(new THREE.Scene(),graph);let status='';nav.onStatus=t=>status=t;
@@ -53,3 +54,6 @@ const campus=new RoadRouter(data.graph),anchors=definitions.map((d:any)=>resolve
 assert.equal(anchors.length,11);assert.ok(anchors.every((a:any)=>a&&!a.confirmed&&a.label.includes('附近道路')),'unverified approaches must not be advertised as confirmed entrances');
 let pairs=0;for(let i=0;i<anchors.length;i++)for(let j=i+1;j<anchors.length;j++){assert.ok(campus.route(anchors[i].snap,anchors[j].snap));pairs++;}
 assert.equal(pairs,55);console.log('PASS 11 explicitly unverified approaches and 55 campus landmark/gate routes');
+assert.deepEqual(routeTurns([[0,0],[100,0],[100,100]]),['前方左转']);
+assert.deepEqual(routeTurns([[0,0],[100,0],[100,-100]]),['前方右转']);
+assert.deepEqual(routeTurns([[0,0],[100,0],[200,0]]),[]);

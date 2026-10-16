@@ -4,7 +4,7 @@ import {RoadRouter,type RoadSnap,type RoadRoute} from './routing.ts';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {resolveAccess} from './accessPoints.ts';
 
-export interface NavEndpoint {snap:RoadSnap;label:string}
+export interface NavEndpoint {snap:RoadSnap;label:string;place?:string}
 function marker(color:number):THREE.Mesh {
   const mesh=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.4,.8,20),new THREE.MeshBasicMaterial({color}));
   mesh.visible=false;mesh.renderOrder=5;return mesh;
@@ -19,6 +19,7 @@ export class Navigator {
   start:NavEndpoint|null=null;
   end:NavEndpoint|null=null;
   result:RoadRoute|null=null;
+  pickEndpoint:'start'|'end'|null=null;
   private scene:THREE.Scene;
   private routeMesh:THREE.Group|null=null;
   private markerA=marker(0x2e9e4f);
@@ -30,17 +31,21 @@ export class Navigator {
   setEnd(x:number,z:number,label='地图终点',maxDistance=140):boolean {return this.setEndpoint('end',x,z,label,maxDistance);}
   private setEndpoint(which:'start'|'end',x:number,z:number,label:string,maxDistance:number):boolean {
     const snap=this.snap(x,z,maxDistance);if(!snap){this.onStatus('附近没有道路，请点更靠近道路的位置');return false;}
-    this[which]={snap,label};this.recompute();return true;
+    this[which]={snap,label};this.pickEndpoint=null;this.recompute();return true;
   }
   clickGround(x:number,z:number):void {
-    if(this.result){this.clearRoute();this.setStart(x,z);}else if(!this.start)this.setStart(x,z);else this.setEnd(x,z);
+    if(this.pickEndpoint){this.setEndpoint(this.pickEndpoint,x,z,this.pickEndpoint==='start'?'地图起点':'地图终点',140);}
+    else if(this.result){this.clearRoute();this.setStart(x,z);}else if(!this.start)this.setStart(x,z);else this.setEnd(x,z);
   }
   setEndBuilding(x:number,z:number,name='建筑'):void {
+    this.setPlace('end',name,x,z);
+  }
+  setPlace(which:'start'|'end',name:string,x:number,z:number):void {
     const access=resolveAccess(name,[x,-z],this.router);if(!access){this.onStatus('该地点附近没有可导航道路');return;}
-    this.end={snap:access.snap,label:access.label};this.recompute();
+    this[which]={snap:access.snap,label:access.label,place:name};this.pickEndpoint=null;this.recompute();
   }
   swap():void {[this.start,this.end]=[this.end,this.start];this.recompute();}
-  clearRoute():void {this.start=null;this.end=null;this.recompute();}
+  clearRoute():void {this.start=null;this.end=null;this.pickEndpoint=null;this.recompute();}
   private clearDrawing():void {
     if(this.routeMesh){this.scene.remove(this.routeMesh);this.routeMesh.traverse(o=>{const m=o as THREE.Mesh;if(m.isMesh){m.geometry.dispose();for(const mat of Array.isArray(m.material)?m.material:[m.material])mat.dispose();}});this.routeMesh=null;}
     this.result=null;
