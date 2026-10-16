@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Area, Building, Road, SceneData } from "./types";
+import { detailedSport } from './sports';
 import {
   facadeTexture,
   idHash01,
@@ -128,6 +129,7 @@ function flatAreaMeshes(geos: THREE.BufferGeometry[], color: number, y: number, 
 export function buildGreen(greenGroup: THREE.Object3D, sportsGroup: THREE.Object3D, green: Area[]): void {
   const buckets = new Map<string, { parent: THREE.Object3D; color: number; geos: THREE.BufferGeometry[] }>();
   for (const a of green) {
+    if (detailedSport(a)) continue;
     const isSport = a.kind === "pitch" || a.kind === "track" || a.kind === "pool";
     const parent = isSport ? sportsGroup : greenGroup;
     const color = isSport && a.sport && SPORT_COLORS[a.sport] ? SPORT_COLORS[a.sport]

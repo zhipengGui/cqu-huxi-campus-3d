@@ -1,0 +1,25 @@
+{
+  "ready": true,
+  "errors": [],
+  "checks": {
+    "sports": {
+      "metrics": {
+        "counts": {
+          "basketball-bank": 1,
+          "basketball": 14,
+          "tennis": 5,
+          "badminton": 20,
+          "volleyball": 2,
+          "beachvolleyball": 1,
+          "table_tennis": 1,
+          "soccer": 5,
+          "pool": 3
+        },
+        "triangles": 49709,
+        "drawCalls": 16
+      },
+      "calls": 142,
+      "triangles": 957353
+    }
+  }
+}
