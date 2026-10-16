@@ -18,12 +18,17 @@
     "selectors": true,
     "detailNavigation": true,
     "swap": true,
+    "walkSpeed": {
+      "normal": 0.35000000000000275,
+      "fast": 0.7999999999999681,
+      "released": 0.35000000000000275
+    },
     "walking": {
       "realPointerLock": true,
-      "movementMeters": 0.9798599999998278,
+      "movementMeters": 2.449650000000049,
       "performanceSample": {
-        "seconds": 0.705199999988079,
-        "fps": 59.55757232091602
+        "seconds": 0.7056999999880791,
+        "fps": 59.51537480616335
       },
       "restored": true,
       "lockFailureRecovery": true,
@@ -32,15 +37,15 @@
       "landmarks": [
         {
           "name": "第一教学楼",
-          "movementMeters": 0.6999999999999574
+          "movementMeters": 1.7500000000006133
         },
         {
           "name": "信息技术科研楼",
-          "movementMeters": 0.7001399999995814
+          "movementMeters": 1.7500000000010087
         },
         {
           "name": "图书馆",
-          "movementMeters": 0.7233800000000095
+          "movementMeters": 1.8084500000000183
         }
       ]
     }

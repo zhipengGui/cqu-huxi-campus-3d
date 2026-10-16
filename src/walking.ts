@@ -22,7 +22,7 @@ export class Walking {
     canvas.ownerDocument.addEventListener('pointerlockerror',()=>{if(this.active)this.exit('无法锁定鼠标，请重新点击开始或返回地图。');});
     window.addEventListener('blur',()=>this.exit());
     document.addEventListener('visibilitychange',()=>{if(document.hidden)this.exit();});
-    document.addEventListener('keydown',e=>{if(this.active&&this.pointer.isLocked&&['KeyW','KeyA','KeyS','KeyD'].includes(e.code)){this.keys.add(e.code);e.preventDefault();}});
+    document.addEventListener('keydown',e=>{if(this.active&&this.pointer.isLocked&&['KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight'].includes(e.code)){this.keys.add(e.code);e.preventDefault();}});
     document.addEventListener('keyup',e=>this.keys.delete(e.code));
   }
   enter(point:RoadPoint,lookAt:RoadPoint):boolean {
@@ -60,7 +60,8 @@ export class Walking {
       delta.addScaledVector(forward,Number(this.keys.has('KeyW'))-Number(this.keys.has('KeyS')));
       delta.addScaledVector(right,Number(this.keys.has('KeyD'))-Number(this.keys.has('KeyA')));
       if(delta.lengthSq()){
-        delta.normalize().multiplyScalar(1.4*Math.max(0,Math.min(.05,seconds)));
+        const speed=this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')?8:3.5;
+        delta.normalize().multiplyScalar(speed*Math.max(0,Math.min(.05,seconds)));
         const [x,north]=this.world.move([c.position.x,-c.position.z],[delta.x,-delta.z]);c.position.set(x,1.65,-north);
       }
     }

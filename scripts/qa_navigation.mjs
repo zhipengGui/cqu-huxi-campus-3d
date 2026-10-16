@@ -45,6 +45,9 @@ try{
     const lock=await evaluate(`({active:window.__huxi.walking.active,locked:document.pointerLockElement===window.__huxi.renderer.domElement,orbit:window.__huxi.controls.enabled,focus:document.hasFocus(),toast:document.querySelector('#toast').textContent,setupHidden:document.querySelector('#walk-setup').hidden})`);
     assert.ok(lock.active&&lock.locked&&!lock.orbit,'walk must acquire a real pointer lock and suspend orbit: '+JSON.stringify({lock,errors}));
     const initial=await evaluate(`window.__huxi.camera.position.toArray()`);
+    checks.walkSpeed=await evaluate(`(()=>{const h=window.__huxi,origin=h.camera.position.clone(),key=(type,code)=>document.dispatchEvent(new KeyboardEvent(type,{code})),move=()=>{h.camera.position.copy(origin);h.walking.update(.05);h.walking.update(.05);return h.camera.position.distanceTo(origin)};key('keydown','KeyW');const normal=move();key('keydown','ShiftLeft');const fast=move();key('keyup','ShiftLeft');const released=move();key('keyup','KeyW');h.camera.position.copy(origin);return {normal,fast,released};})()`);
+    assert.ok(Math.abs(checks.walkSpeed.normal-.35)<.01,'normal walking should cover 0.35m in 0.1s: '+JSON.stringify(checks.walkSpeed));
+    assert.ok(Math.abs(checks.walkSpeed.fast-.8)<.01,'Shift should cover 0.8m in 0.1s');assert.ok(Math.abs(checks.walkSpeed.released-.35)<.01,'releasing Shift must restore normal speed');
     const sample=await evaluate(`({time:performance.now(),frame:window.__huxi.renderer.info.render.frame})`);
     await send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyS',key:'s',windowsVirtualKeyCode:83});await delay(700);await send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyS',key:'s',windowsVirtualKeyCode:83});
     const performanceSample=await evaluate(`({seconds:(performance.now()-${sample.time})/1000,fps:(window.__huxi.renderer.info.render.frame-${sample.frame})*1000/(performance.now()-${sample.time})})`);
