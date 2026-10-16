@@ -1,0 +1,53 @@
+{
+  "ready": true,
+  "errors": [],
+  "checks": {
+    "staticShadow": {
+      "framebufferBinds": 0,
+      "fps": 59.97546458291436,
+      "rafFPS": 239.90185833165745
+    },
+    "sports": {
+      "metrics": {
+        "counts": {
+          "basketball-bank": 1,
+          "basketball": 14,
+          "tennis": 5,
+          "badminton": 20,
+          "volleyball": 2,
+          "beachvolleyball": 1,
+          "table_tennis": 1,
+          "track": 1,
+          "soccer": 5,
+          "pool": 3
+        },
+        "triangles": 53251,
+        "drawCalls": 19
+      },
+      "calls": 145,
+      "triangles": 867651
+    },
+    "mobileUI": true,
+    "shareRestore": true,
+    "export": {
+      "bytes": 182051,
+      "width": 390,
+      "height": 882
+    },
+    "sceneFailureRecovery": true,
+    "modelFallback": true,
+    "expectedFaultErrors": 2,
+    "crossDeviceShare": [
+      {
+        "width": 390,
+        "height": 844,
+        "inside": true
+      },
+      {
+        "width": 1440,
+        "height": 960,
+        "inside": true
+      }
+    ]
+  }
+}

@@ -33,6 +33,8 @@ import { collectPlaces, initPlacesPanel, type PlaceEntry, type PlacesPanel } fro
 import { PLACE_INFO } from "./placesInfo";
 import { TOUR_STOPS } from "./tourStops";
 import { facadeTexture, roofMaterial } from "./facades";
+import {formatSharedView,parseSharedView,sharedDistanceScale} from './shareView';
+import {advanceFrame} from './frameTiming';
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const statsEl = document.querySelector<HTMLDivElement>("#hud-stats")!;
@@ -47,6 +49,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate=false;
+let shadowDirty=true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.03;
 app.appendChild(renderer.domElement);
@@ -201,20 +205,24 @@ async function loadLandmarkGLB(asset: string, b: Building): Promise<THREE.Group 
     return root;
   } catch (error) {
     console.warn("地标模型加载失败，使用回退建筑", asset, error);
+    notifyModelFallback();
     return null;
   }
 }
 
 function updateDetailAssets(): void {
+  for(const mesh of gSports.children)if(['sports-net','sports-orange','sports-glass'].includes(mesh.name))
+    mesh.visible=resolveHighQuality()&&camera.position.distanceTo(controls.target)<800;
   for (const entry of detailAssets) {
     const close = resolveHighQuality() && camera.position.distanceTo(entry.root.position) < 650;
-    if (entry.near) { entry.near.visible = close; entry.far.visible = !close; }
+    if (entry.near) { if(entry.near.visible!==close)shadowDirty=true;entry.near.visible = close; entry.far.visible = !close; }
     else if (close && !entry.requested) {
       entry.requested = true;
       void gltfLoader.loadAsync("models/" + entry.asset + ".glb?v=8").then((gltf) => {
         entry.near = gltf.scene; tagAsset(gltf.scene, entry.building, entry.root);
         entry.root.add(gltf.scene);
-      }).catch(() => { /* Far model remains usable if the detail request fails. */ });
+        shadowDirty=true;
+      }).catch(() => { notifyModelFallback(); });
     }
   }
 }
@@ -234,9 +242,13 @@ function loadGateGLB(asset: string, gate: Gate): Promise<THREE.Group | null> {
         resolve(g);
       },
       undefined,
-      () => resolve(null),
+      () => {notifyModelFallback();resolve(null);},
     );
   });
+}
+function notifyModelFallback():void {
+  const status=document.querySelector<HTMLElement>('#asset-status')!;
+  status.hidden=false;status.textContent='部分模型暂未加载，已保留简化外观；刷新页面可重试。';
 }
 
 function fallbackLandmark(b: Building): THREE.Group {
@@ -505,10 +517,42 @@ async function loadScene(): Promise<void> {
 loadScene().then(() => {
   renderLayers();
   renderLighting();
-  if (!location.hash.includes("v=")) homeView();
+  const view=parseSharedView(location.hash);
+  if(view) {
+    applyLighting(view.preset as PresetName);
+    const place=places.find(p=>p.name===view.place);
+    if(place){if(place.mesh)picker?.select(place.mesh);openDetail(place);}
+    hud.classList.toggle('collapsed',view.collapsed);
+    document.querySelector('#hud-fold')!.setAttribute('aria-expanded',String(!view.collapsed));
+    camera.position.fromArray(view.position);controls.target.fromArray(view.target);
+    if(view.offset.length===2&&view.viewport[0]===innerWidth&&view.viewport[1]===innerHeight)
+      camera.setViewOffset(innerWidth,innerHeight,view.offset[0]*innerWidth,view.offset[1]*innerHeight,innerWidth,innerHeight);
+    else {
+      const rect=mapRect(),offset=camera.position.clone().sub(controls.target);
+      let subject=campusPoints;
+      if(place?.mesh||place?.extent) {
+        const box=place.mesh?boundsOf(place.mesh):new THREE.Box3(
+          place.target.clone().add(new THREE.Vector3(-place.extent!.width/2,0,-place.extent!.length/2)),
+          place.target.clone().add(new THREE.Vector3(place.extent!.width/2,5,place.extent!.length/2)));
+        subject=[];for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z])subject.push(new THREE.Vector3(x,y,z));
+      }
+      const dir=offset.clone().normalize(),depths=subject.map(p=>p.clone().sub(controls.target).dot(dir));
+      const scale=sharedDistanceScale(view,{width:innerWidth,height:innerHeight},{width:rect.right-rect.left,height:rect.bottom-rect.top},[Math.min(...depths),Math.max(...depths)]);
+      offset.setLength(THREE.MathUtils.clamp(offset.length()*scale,12,8500));camera.position.copy(controls.target).add(offset);
+      composeRect(rect);
+    }
+    controls.update();
+  } else homeView();
+  shadowDirty=true;
+  document.querySelector<HTMLElement>('#boot')!.hidden=true;
 }).catch((e: unknown) => {
   statsEl.textContent = "加载出错：" + (e instanceof Error ? e.message : String(e));
   statsEl.classList.add("err");
+  document.querySelector<HTMLElement>('#boot')!.hidden=false;
+  document.querySelector('#boot-title')!.textContent='校园数据加载失败';
+  document.querySelector('#boot-note')!.textContent='请检查网络，然后重新加载。';
+  document.querySelector<HTMLElement>('.boot-spinner')!.hidden=true;
+  document.querySelector<HTMLButtonElement>('#boot-retry')!.hidden=false;
 });
 
 // ---- 标签页 ----
@@ -552,6 +596,7 @@ function renderLayers(): void {
       `<span class="sw"><input type="checkbox" id="${id}" ${def.get() ? "checked" : ""} /><i></i></span>`;
     (row.querySelector("input") as HTMLInputElement).addEventListener("change", (e) => {
       def.set((e.target as HTMLInputElement).checked);
+      shadowDirty=true;
     });
     list.appendChild(row);
   }
@@ -575,6 +620,7 @@ function applyQuality(): void {
   const high = resolveHighQuality();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 2 : 1));
   renderer.shadowMap.enabled = high;
+  shadowDirty=true;
   for (const b of document.querySelectorAll<HTMLButtonElement>("#quality-seg .tb")) {
     b.classList.toggle("on", b.dataset.q === quality);
   }
@@ -601,6 +647,7 @@ function applyLighting(key: PresetName): void {
   currentPreset = key;
   picker?.clearSelection();
   dayNight?.apply(key);
+  shadowDirty=true;
   sunDirection = sun.position.toArray() as [number,number,number];
   for (const c of document.querySelectorAll<HTMLButtonElement>("#lighting-list .lt-card")) {
     c.classList.toggle("on", c.dataset.key === key);
@@ -771,12 +818,13 @@ function showToast(msg: string): void {
 }
 
 document.querySelector("#tl-share")!.addEventListener("click", () => {
-  const p = camera.position;
-  const tg = controls.target;
-  const hash = `v=${Math.round(p.x)},${Math.round(p.y)},${Math.round(p.z)},` +
-    `${Math.round(tg.x)},${Math.round(tg.y)},${Math.round(tg.z)}`;
-  const url = location.origin + location.pathname + "#" + hash;
-  window.navigator.clipboard.writeText(url).then(
+  const rect=mapRect();
+  const hash=formatSharedView({position:camera.position.toArray(),target:controls.target.toArray(),
+    collapsed:hud.classList.contains('collapsed'),offset:[(camera.view?.offsetX??0)/innerWidth,(camera.view?.offsetY??0)/innerHeight],
+    viewport:[innerWidth,innerHeight],frame:[rect.right-rect.left,rect.bottom-rect.top],preset:currentPreset,...(selectedPlace?{place:selectedPlace.name}:{})});
+  const url = location.origin + location.pathname + hash;
+  history.replaceState(null,'',url);
+  (window.navigator.clipboard?.writeText(url)??Promise.reject()).then(
     () => showToast("链接已复制，可分享当前视角"),
     () => showToast("复制失败，请手动复制地址栏"),
   );
@@ -809,24 +857,10 @@ document.querySelector("#tl-export")!.addEventListener("click", () => {
   showToast("图片已导出");
 });
 
-// 启动时从 URL hash 恢复视角（分享链接用）
-(function restoreViewFromHash(): void {
-  const m = location.hash.match(/v=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)/);
-  if (!m) return;
-  const [px, py, pz, tx, ty, tz] = m.slice(1).map(Number);
-  camera.position.set(px, py, pz);
-  controls.target.set(tx, ty, tz);
-  controls.update();
-  if (scene.fog instanceof THREE.Fog) {
-    const distance = camera.position.distanceTo(controls.target);
-    scene.fog.near = Math.max(2100, distance * 1.3);
-    scene.fog.far = Math.max(5200, distance * 2.2);
-  }
-})();
-
 // ---- 键盘快捷键 ----
 function escapeAll(): void {
-  if (navMode) setNavMode(false);
+  if(document.querySelector('#tools')!.classList.contains('open')){document.querySelector('#tl-more')!.dispatchEvent(new Event('click'));}
+  else if (navMode) setNavMode(false);
   else if (tour.on) setTour(false);
   else closeDetail();
 }
@@ -846,9 +880,11 @@ window.addEventListener("keydown", (e) => {
 
 // ---- 渲染循环（60fps 帽）----
 let lastFrame = 0;
+const lastShadowTarget=new THREE.Vector3(Infinity,Infinity,Infinity);
+let lastShadowSize=-1;
 renderer.setAnimationLoop((t) => {
-  if (t - lastFrame < 15) return;
-  lastFrame = t;
+  const nextFrame=advanceFrame(lastFrame,t);if(nextFrame===null)return;
+  lastFrame=nextFrame;
   // 水面波纹缓慢流动
   const ripple = waterMaterial.normalMap;
   if (ripple) {
@@ -863,10 +899,13 @@ renderer.setAnimationLoop((t) => {
     scene.fog.far = Math.max(5200, distance * 2.2);
   }
   const shadowSize = THREE.MathUtils.clamp(camera.position.distanceTo(controls.target) * .85, 160, 1700);
-  sun.position.copy(controls.target).add(new THREE.Vector3(...sunDirection));
-  sun.target.position.copy(controls.target);
-  Object.assign(sun.shadow.camera, { left: -shadowSize, right: shadowSize, top: shadowSize, bottom: -shadowSize });
-  sun.shadow.camera.updateProjectionMatrix();
+  if(shadowDirty||lastShadowTarget.distanceToSquared(controls.target)>.01||Math.abs(shadowSize-lastShadowSize)>.5) {
+    sun.position.copy(controls.target).add(new THREE.Vector3(...sunDirection));
+    sun.target.position.copy(controls.target);
+    Object.assign(sun.shadow.camera, { left: -shadowSize, right: shadowSize, top: shadowSize, bottom: -shadowSize });
+    sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;
+    lastShadowTarget.copy(controls.target);lastShadowSize=shadowSize;shadowDirty=false;
+  }
   labels.update(camera, controls.target);
   renderer.render(scene, camera);
   labels.render(scene, camera);

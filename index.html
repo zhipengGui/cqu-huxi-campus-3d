@@ -282,6 +282,18 @@
     button:focus-visible, a:focus-visible { outline:2px solid #458565; outline-offset:3px; }
     #app canvas:focus { outline:none; }
     .brand-copy { min-width:0; overflow:hidden; }
+    #boot { position:fixed; inset:0; z-index:40; display:grid; place-items:center; background:#d6d8c8e8; }
+    #boot[hidden] { display:none; }
+    .boot-card { width:min(300px,calc(100vw - 64px)); padding:28px; background:#fffffff2; color:#294836; border-radius:18px; box-shadow:0 10px 40px #22312214; text-align:center; }
+    .boot-card strong { display:block; margin:14px 0 8px; font-size:18px; }
+    .boot-card p { margin:0 0 16px; font-size:13px; line-height:1.7; color:#657466; }
+    .boot-spinner { display:inline-block; width:24px; height:24px; border:3px solid #d4dfcf; border-top-color:#2d6b50; border-radius:50%; animation:spin 1s linear infinite; }
+    .boot-spinner[hidden] { display:none; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @media (prefers-reduced-motion:reduce) { .boot-spinner { animation:none; } }
+    #boot-retry { padding:8px 22px; border:0; border-radius:8px; background:#2d6b50; color:#fff; cursor:pointer; }
+    #asset-status { position:fixed; left:50%; bottom:12px; transform:translateX(-50%); z-index:12; padding:7px 12px; border-radius:8px; font-size:12px; color:#6a482c; background:#fff1dceF; max-width:75vw; }
+    #asset-status[hidden] { display:none; }
     @media (max-width: 640px) {
       #brand { top:12px; left:12px; width:calc(100vw - 152px); gap:8px; padding:9px 10px; border-radius:11px; }
       #brand .brand-mark { width:30px; height:30px; border-radius:8px; }
@@ -325,6 +337,8 @@
   </style>
 </head>
 <body>
+  <div id="boot" role="status" aria-live="polite"><div class="boot-card"><span class="boot-spinner" aria-hidden="true"></span><strong id="boot-title">正在打开虎溪校园</strong><p id="boot-note">加载校园与地标模型，首次打开请稍候。</p><button id="boot-retry" type="button" hidden>重新加载</button></div></div>
+  <div id="asset-status" role="status" hidden></div>
   <div id="app"></div>
   <div id="brand" aria-label="重庆大学虎溪校区三维地图">
     <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M3 27h26M5 25V13l11-8 11 8v12M9 25V14h14v11M13 25v-7h6v7M12 10h8"/></svg></span>
@@ -433,7 +447,15 @@
       <button id="ic-close" type="button">关闭</button>
     </div>
   </div>
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module">
+    document.querySelector('#boot-retry').addEventListener('click',()=>location.reload());
+    import('./src/main.ts').catch(()=>{
+      document.querySelector('#boot-title').textContent='地图暂时无法打开';
+      document.querySelector('#boot-note').textContent='请检查网络或浏览器的 WebGL 支持，然后重试。';
+      document.querySelector('.boot-spinner').hidden=true;
+      document.querySelector('#boot-retry').hidden=false;
+    });
+  </script>
   <a id="osm-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap 贡献者</a>
   <div id="toast"></div>
 </body>
