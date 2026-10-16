@@ -1,0 +1,23 @@
+{
+  "asset": "likelou",
+  "buildingId": 14108774,
+  "detail": "far",
+  "courtyards": 2,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -57.65846918079715,
+      -80.34721363505216,
+      0.0
+    ],
+    [
+      57.69,
+      80.37999047173433,
+      31.339999999999996
+    ]
+  ],
+  "triangles": 56836,
+  "bytes": 452744,
+  "materials": 6,
+  "heightConfidence": "Official overall height and storeys; detailed elevations remain estimated"
+}

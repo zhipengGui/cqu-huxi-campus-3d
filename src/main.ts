@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { boundsOf, frameBox } from "./landmarkViews";
+import { boundsOf, frameBox, placeRoot } from "./landmarkViews";
 import { clipRoads, inCampus } from "./campusClip";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { SceneData, Building, Gate } from "./types";
@@ -142,8 +142,8 @@ scene.add(gGreen, gSports, gWater, gRoads, gTrees, gContext);
 
 // ---- GLB ----
 const gltfLoader = new GLTFLoader();
-const GLB_LANDMARKS = new Set(["library", "info", "gym", "gongke", "activity", "zonghe", "teaching1"]);
-const PRIORITY_ASSETS = new Set(["zonghe", "teaching1", "info"]);
+const GLB_LANDMARKS = new Set(["library", "info", "gym", "gongke", "activity", "zonghe", "teaching1", "likelou"]);
+const PRIORITY_ASSETS = new Set(["zonghe", "teaching1", "info", "library", "likelou", "gym", "activity", "gongke"]);
 const draco = new DRACOLoader().setDecoderPath(import.meta.env.BASE_URL + "draco/");
 gltfLoader.setDRACOLoader(draco);
 const detailAssets: { root: THREE.Group; far: THREE.Group; asset: string; building: Building; near?: THREE.Group; requested: boolean }[] = [];
@@ -161,6 +161,7 @@ function bboxCenterOfBuilding(b: Building): [number, number] {
 function tagAsset(g: THREE.Group, b: Building, root: THREE.Group): void {
   const [cx, cy] = bboxCenterOfBuilding(b);
   g.traverse((o) => {
+    if (typeof o.userData.courtX === "number") root.userData.court = new THREE.Vector3(o.userData.courtX, 2, -o.userData.courtNorth);
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     mesh.castShadow = true; mesh.receiveShadow = true;
@@ -173,7 +174,7 @@ async function loadLandmarkGLB(asset: string, b: Building): Promise<THREE.Group 
   if (!GLB_LANDMARKS.has(asset)) return null;
   const priority = PRIORITY_ASSETS.has(asset);
   try {
-    const gltf = await gltfLoader.loadAsync("models/" + asset + (priority ? ".far" : "") + ".glb");
+    const gltf = await gltfLoader.loadAsync("models/" + asset + (priority ? ".far" : "") + ".glb?v=7");
     const root = new THREE.Group();
     const [cx, cy] = bboxCenterOfBuilding(b);
     root.position.set(cx, 0, -cy); root.name = b.name;
@@ -192,7 +193,7 @@ function updateDetailAssets(): void {
     if (entry.near) { entry.near.visible = close; entry.far.visible = !close; }
     else if (close && !entry.requested) {
       entry.requested = true;
-      void gltfLoader.loadAsync("models/" + entry.asset + ".glb").then((gltf) => {
+      void gltfLoader.loadAsync("models/" + entry.asset + ".glb?v=7").then((gltf) => {
         entry.near = gltf.scene; tagAsset(gltf.scene, entry.building, entry.root);
         entry.root.add(gltf.scene);
       }).catch(() => { /* Far model remains usable if the detail request fails. */ });
@@ -203,7 +204,7 @@ function updateDetailAssets(): void {
 function loadGateGLB(asset: string, gate: Gate): Promise<THREE.Group | null> {
   return new Promise((resolve) => {
     gltfLoader.load(
-      "models/" + asset + ".glb",
+      "models/" + asset + ".glb?v=7",
       (gltf) => {
         const g = gltf.scene;
         g.position.set(gate.x, 0, -gate.y);
@@ -282,13 +283,16 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
   let distance = fit.distance;
   let dir = new THREE.Vector3(.70,.80,1.0);
   if (view === "facade") { dir.set(.2,.35,1); distance *= .82; }
-  if (view === "court") { dir.set(.5,1.2,.7); distance *= .48; }
+  if (view === "court") {
+    dir.set(.25,1.7,.45); distance = Math.max(75,distance*.36);
+    const root = placeRoot(mesh);
+    if (root.userData.court) center.copy(root.localToWorld((root.userData.court as THREE.Vector3).clone()));
+  }
   // Compose into the actual free area, not behind the side/bottom panel.
   camera.setViewOffset(window.innerWidth, window.innerHeight,
     window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .18 : 0,
     window.innerWidth, window.innerHeight);
-  camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(camera.position.distanceTo(controls.target)));
-  flyTo(camera, controls, center, distance);
+  flyTo(camera, controls, center, distance, 1100, dir);
 }
 
 function homeView(): void {
@@ -297,8 +301,7 @@ function homeView(): void {
     window.innerWidth, window.innerHeight);
   const usable = Math.max(240, window.innerWidth - (window.innerWidth > 640 ? 340 : 0));
   const fit = frameBox(campusBounds, camera.fov, usable / window.innerHeight);
-  camera.position.copy(controls.target).add(new THREE.Vector3(.28,1.45,1).normalize().multiplyScalar(camera.position.distanceTo(controls.target)));
-  flyTo(camera, controls, fit.target, fit.distance * (window.innerWidth > 640 ? .70 : .90));
+  flyTo(camera, controls, fit.target, fit.distance * (window.innerWidth > 640 ? .70 : .90), 1100, new THREE.Vector3(.28,1.45,1));
 }
 
 function selectPlace(it: SearchItem): void {
@@ -332,6 +335,8 @@ async function loadScene(): Promise<void> {
   const campusGreen = data.green.filter(a => {
     const outer = a.outers[0];
     if (!outer || a.inside === false) return false;
+    // Preserve the sports locations already accepted in v6 while other exterior greenery is subdued.
+    if (a.kind === "pitch" || a.kind === "pool") return true;
     return !data.boundary || inCampus(bboxCenter(outer), data.boundary.pts);
   });
   buildGreen(gGreen, gSports, campusGreen);
@@ -360,9 +365,9 @@ async function loadScene(): Promise<void> {
   buildingsRef = buildings;
   const landmarkDefs = inside.filter((b) => b.landmark);
   const landmarkGroups = await Promise.all(landmarkDefs.map(async (b) => {
-    if (b.landmark === "gym") return buildGym(b); // 学位帽造型重做版（替代旧 gym.glb）
     const glb = await loadLandmarkGLB(b.landmark, b);
     if (glb) return glb;
+    if (b.landmark === "gym") return buildGym(b);
     if (b.landmark === "library") return buildLibrary(b);
     if (b.landmark === "activity") return buildActivity(b);
     if (b.landmark === "zonghe") return buildZonghe(b);

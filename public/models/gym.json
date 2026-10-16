@@ -1,0 +1,23 @@
+{
+  "asset": "gym",
+  "buildingId": 1093483967,
+  "detail": "near",
+  "courtyards": 0,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -47.79999931833392,
+      -46.96500000000003,
+      0.0
+    ],
+    [
+      47.79999931833392,
+      44.44499931355586,
+      24.2
+    ]
+  ],
+  "triangles": 22248,
+  "bytes": 147012,
+  "materials": 6,
+  "heightConfidence": "Overall height calibrated; roof taper, ribs and stairs estimated from available photo"
+}

@@ -66,7 +66,7 @@ def material(name,color,rough=.8,metal=0):
     return m
 
 
-def palette(style):
+def palette(style,detail):
     colors={
         'wall': ((.57,.53,.43) if style=='stone' else (.76,.75,.68)),
         'trim': ((.66,.62,.52) if style=='stone' else (.87,.86,.79)),
@@ -76,7 +76,25 @@ def palette(style):
         'plant': (.17,.29,.12), 'screen': (.72,.73,.68)
     }
     mats={k:material(k,v,.24 if k=='glass' else .85,.12 if k in ('glass','metal','screen') else 0) for k,v in colors.items()}
+    if style in ('library','rust','brick'):
+        mats['wall'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.42,.15,.095,1)
+        mats['trim'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.59,.27,.17,1)
+    if style=='gym':
+        mats['wall'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.46,.19,.12,1)
+        mats['roof'].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=(.63,.67,.68,1)
+        mats['roof'].node_tree.nodes['Principled BSDF'].inputs['Metallic'].default_value=.35
     mats['water'].node_tree.nodes['Principled BSDF'].inputs['Roughness'].default_value=.15
+    if style=='frame' and detail:
+        pixels=np.ones((128,128,4),dtype=np.float32)
+        pixels[:,:,:3]=(.72,.73,.68)
+        for y in range(2,128,8):
+            for x in range(2,128,8):pixels[y:y+3,x:x+3,3]=0
+        im=bpy.data.images.new('perforated_aluminium',128,128);im.pixels.foreach_set(pixels.ravel());im.pack()
+        mat=mats['screen'];mat.surface_render_method='DITHERED'
+        tex=mat.node_tree.nodes.new('ShaderNodeTexImage');tex.image=im
+        bs=mat.node_tree.nodes['Principled BSDF']
+        mat.node_tree.links.new(tex.outputs['Color'],bs.inputs['Base Color'])
+        mat.node_tree.links.new(tex.outputs['Alpha'],bs.inputs['Alpha'])
     # Procedural stone is baked into a small embedded bitmap; coordinates are metres.
     if style=='stone':
         rng=np.random.default_rng(81)
@@ -117,6 +135,14 @@ def facades(m,rings,H,levels,style,detail):
         step=3.1 if style=='stone' else 3.8
         count=max(1,round(L/step));bay=L/count
         thickness=.65 if style=='stone' else .38
+        if style=='stone' and ri==0 and abs(a[0]+71.9)<3 and 20<L<25 and abs(dy)>.9:
+            # Photo-supported glazed end; its orientation remains an estimated parameter.
+            box('glass',L/2,-.48,body/2,L-1.4,.10,body-1)
+            for t in [.35,L-.35]:box('wall',t,-.25,body/2,.7,.65,body)
+            for f in range(levels+1):box('metal',L/2,-.36,min(body-.2,f*body/levels+.2),L-.8,.12,.08)
+            for j in range(max(2,round(L/1.5))):box('metal',(j+.5)*L/round(L/1.5),-.36,body/2,.075,.12,body-.5)
+            box('wall',L/2,-.2,body-.25,L,.8,.5)
+            continue
         if base:
             if ri:
                 # Open columns with recessed glazing; no dark solid stand-in.
@@ -204,11 +230,47 @@ def courtyard(m,ring,style,detail,index):
             for s in (-1,1):m.box('stone',x+s*min(4,r*.75),y,.38,.55,min(5,r),.55)
 
 
+def library_model(m,rings,H,detail):
+    facades(m,rings,10,3,'library',detail)
+    # Slender landmark wall above the mapped podium; fin depth is real geometry.
+    L=74;D=15;bottom=10;body=H-bottom-.7
+    m.box('wall',0,9,bottom+body/2,L,D,body)
+    for y in (9-D/2-.15,9+D/2+.15):
+        for i in range(56 if detail else 28):
+            count=56 if detail else 28
+            m.box('trim',-L/2+(i+.5)*L/count,y,bottom+body/2,.16,.65,body)
+    m.box('trim',0,9,H-.35,L+.3,D+.3,.7)
+    # Ground forecourt and distinct recessed glass entrance.
+    m.box('paving',0,-44,.12,36,5,.2)
+    m.box('glass',0,-42.1,3.2,23,.12,5.5)
+    for i in range(8):m.box('trim',-11.5+i*3.3,-42.2,3.2,.16,.25,5.5)
+
+
+def gym_model(m,rings,H,detail):
+    facades(m,rings,10.8,3,'gym',detail)
+    outer=rings[0];xs=[p[0] for p in outer];ys=[p[1] for p in outer]
+    w=max(xs)-min(xs);d=max(ys)-min(ys)
+    low=[(-w*.39,-d*.38),(w*.39,-d*.38),(w*.39,d*.38),(-w*.39,d*.38)]
+    top=[(-w*.49,-d*.48),(w*.49,-d*.48),(w*.49,d*.48),(-w*.49,d*.48)]
+    for i in range(4):
+        j=(i+1)%4
+        m.face('roof',[(low[i][0],low[i][1],11.6),(low[j][0],low[j][1],11.6),(top[j][0],top[j][1],H-.6),(top[i][0],top[i][1],H-.6)])
+    m.face('roof',[(x,y,H-.6) for x,y in top])
+    m.box('roof',0,0,H-.3,w*.65,d*.65,.6)
+    if detail:
+        for i in range(42):
+            x=-w*.48+i*w*.96/41
+            for sign in (-1,1):m.box('trim',x,sign*d*.475,H-6,.10,.18,10.4)
+    for i in range(12):m.box('paving',0,-d/2-2.5+i*.35,.1+(i+1)*.13,17,.38,(i+1)*.26)
+
+
 def export_asset(asset, config, building, detail):
     bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
     _,rings=local_rings(building['polygon'],building['holes'])
     model=Model();H=config['height'];style=config['style']
-    facades(model,rings,H,config['levels'],style,detail)
+    if asset=='library':library_model(model,rings,H,detail)
+    elif asset=='gym':gym_model(model,rings,H,detail)
+    else:facades(model,rings,H,config['levels'],style,detail)
     # Largest court first; all other OSM courts remain genuinely open.
     holes=sorted(rings[1:],key=lambda r:abs(signed_area(r)),reverse=True)
     for i,hole in enumerate(holes):courtyard(model,hole,style,detail,i)
@@ -220,10 +282,13 @@ def export_asset(asset, config, building, detail):
             for j in range(10):model.box('trim',cx-18+j*4,cy,z,.20,6.4,3.0)
             model.box('trim',cx,cy,z-1.45,36.4,6.6,.22)
         model.box('trim',cx,cy,H-1.25,36.4,6.6,.3)
-    mats=palette(style)
+    mats=palette(style,detail)
     root=bpy.data.objects.new(asset,None);bpy.context.collection.objects.link(root)
-    root['buildingId']=str(config['id']);root['heightEstimated']=True
+    root['buildingId']=str(config['id']);root['heightEstimated']=not config['heightConfidence'].startswith('Official')
     root['sourceUrl']=config['reference']
+    if holes:
+        point=interior_point(holes[0])
+        if point:root['courtX']=point[0];root['courtNorth']=point[1]
     for name,(verts,faces) in model.parts.items():
         if not faces:continue
         mesh=bpy.data.meshes.new(name);mesh.from_pydata(verts,[],faces);mesh.update()
@@ -235,6 +300,12 @@ def export_asset(asset, config, building, detail):
             for li in poly.loop_indices:
                 p=mesh.vertices[mesh.loops[li].vertex_index].co
                 uv.data[li].uv=((p.x if ax!=0 else p.y)/4,(p.z if ax!=2 else p.y)/4)
+    if asset=='library':
+        text=bpy.data.curves.new('重庆大学','FONT');text.body='重庆大学';text.size=2.5;text.align_x='CENTER';text.extrude=.035
+        try:text.font=bpy.data.fonts.load('C:/Windows/Fonts/msyh.ttc')
+        except RuntimeError:pass
+        obj=bpy.data.objects.new('重庆大学',text);bpy.context.collection.objects.link(obj);obj.parent=root
+        obj.location=(0,1.30,H-3.2);obj.rotation_euler=(math.pi/2,0,0);text.materials.append(material('校名',(.55,.025,.02)))
     out=ROOT/'public'/'models';out.mkdir(parents=True,exist_ok=True)
     path=out/(asset+('' if detail else '.far')+'.glb')
     bpy.ops.export_scene.gltf(filepath=str(path),export_format='GLB',export_yup=True,export_extras=True,export_cameras=False,export_lights=False,
@@ -242,7 +313,7 @@ def export_asset(asset, config, building, detail):
         export_draco_position_quantization=16,export_draco_normal_quantization=10,export_draco_texcoord_quantization=12)
     # Validate the actual Blender geometry before handing it to the web exporter.
     roof_v,roof_f=model.parts['roof']
-    for face in roof_f:
+    for face in roof_f if asset not in ('library','gym') else []:
         p=[roof_v[i] for i in face]
         assert contains((sum(v[0] for v in p)/len(p),sum(v[1] for v in p)/len(p)),rings[0],rings[1:]),'courtyard roof covered'
     all_v=[v for vertices,_ in model.parts.values() for v in vertices]
@@ -288,7 +359,7 @@ def main():
     args=parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
     configs=json.loads((ROOT/'data'/'landmark_details.json').read_text(encoding='utf8'))
     buildings=json.loads((ROOT/'public'/'data'/'scene.json').read_text(encoding='utf8'))['buildings']
-    for asset in (['zonghe','teaching1','info'] if args.asset=='all' else [args.asset]):
+    for asset in ([key for key in configs if not key.startswith('_')] if args.asset=='all' else [args.asset]):
         cfg=configs[asset];b=next(b for b in buildings if str(b['id'])==str(cfg['id']))
         export_asset(asset,cfg,b,False)
         if not args.far_only:export_asset(asset,cfg,b,True)

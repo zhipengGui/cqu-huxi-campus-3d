@@ -1,0 +1,23 @@
+{
+  "asset": "library",
+  "buildingId": 485337678,
+  "detail": "near",
+  "courtyards": 0,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -48.699999940972276,
+      -46.5,
+      0.0
+    ],
+    [
+      48.699999956642976,
+      42.20999994218305,
+      66.7
+    ]
+  ],
+  "triangles": 22562,
+  "bytes": 154344,
+  "materials": 6,
+  "heightConfidence": "Official overall height; podium, fin spacing and wall placement estimated from photos"
+}

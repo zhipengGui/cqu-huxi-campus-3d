@@ -1,31 +1,145 @@
 {
   "_note": "Local east/north/up metres. Heights and minor dimensions remain estimates unless an official source explicitly supports them. Photos date from the available official gallery, not a 2026 survey.",
   "zonghe": {
-    "id": 14628790, "name": "综合楼", "height": 16.5, "levels": 5,
-    "heightConfidence": "OSM levels × 3.3m; not surveyed", "style": "stone",
+    "id": 14628790,
+    "name": "综合楼",
+    "height": 16.5,
+    "levels": 5,
+    "heightConfidence": "OSM levels × 3.3m; not surveyed",
+    "style": "stone",
     "reference": "https://www.cqu.edu.cn/zjzd/gyzd/jz_db.htm",
     "photo": "虎溪综合楼.jpg",
-    "observed": ["stone-clad walls", "deep vertical windows", "glazed end wall", "open ground colonnade", "sunken courtyard", "circular pool"],
-    "estimated": ["window dimensions", "wing heights", "courtyard depth 2.7m", "pool size and exact placement", "unseen rear elevations"]
+    "observed": [
+      "stone-clad walls",
+      "deep vertical windows",
+      "glazed end wall",
+      "open ground colonnade",
+      "sunken courtyard",
+      "circular pool"
+    ],
+    "estimated": [
+      "window dimensions",
+      "wing heights",
+      "courtyard depth 2.7m",
+      "pool size and exact placement",
+      "unseen rear elevations"
+    ]
   },
   "teaching1": {
-    "id": 13986652, "name": "第一教学楼", "height": 16.5, "levels": 5,
-    "heightConfidence": "Five storeys officially documented; 3.3m storeys estimated", "style": "teaching",
+    "id": 13986652,
+    "name": "第一教学楼",
+    "height": 16.5,
+    "levels": 5,
+    "heightConfidence": "Five storeys officially documented; 3.3m storeys estimated",
+    "style": "teaching",
     "reference": "https://jjc.cqu.edu.cn/info/1157/3571.htm",
     "secondaryReference": "https://youth.cqu.edu.cn/info/1007/1929.htm",
-    "observed": ["five storeys", "interconnected building wings", "courtyard footprint from OSM"],
-    "estimated": ["overall height", "window spacing", "unseen roof and rear", "entrance position"],
+    "observed": [
+      "five storeys",
+      "interconnected building wings",
+      "courtyard footprint from OSM"
+    ],
+    "estimated": [
+      "overall height",
+      "window spacing",
+      "unseen roof and rear",
+      "entrance position"
+    ],
     "limitation": "Exterior detail reference incomplete; conservative representation, not a measured reconstruction"
   },
   "info": {
-    "id": 14566184, "name": "信息技术科研楼", "height": 26.4, "levels": 8,
-    "heightConfidence": "OSM levels × 3.3m; not surveyed", "style": "frame",
+    "id": 14566184,
+    "name": "信息技术科研楼",
+    "height": 26.4,
+    "levels": 8,
+    "heightConfidence": "OSM levels × 3.3m; not surveyed",
+    "style": "frame",
     "reference": "https://m.thepaper.cn/baijiahao_20117818",
     "secondaryReference": "https://news.cqu.edu.cn/archives/news2/content/2021/10/12/39a7c73e31b7464db56e4f69b66bc1ada2aba991.html",
     "photo": "虎溪信息大楼.jpg",
-    "observed": ["projecting white grid", "recessed glazing", "perforated aluminium outer screens", "sunken courtyard steps", "open roof frames", "high connecting bridge"],
-    "documentedComponents": {"northBridgeSpan": 36, "trussHeight": 9.4},
-    "estimated": ["overall height", "bay spacing", "screen distribution on unseen walls", "courtyard depth and exact bridge elevation"],
+    "observed": [
+      "projecting white grid",
+      "recessed glazing",
+      "perforated aluminium outer screens",
+      "sunken courtyard steps",
+      "open roof frames",
+      "high connecting bridge"
+    ],
+    "documentedComponents": {
+      "northBridgeSpan": 36,
+      "trussHeight": 9.4
+    },
+    "estimated": [
+      "overall height",
+      "bay spacing",
+      "screen distribution on unseen walls",
+      "courtyard depth and exact bridge elevation"
+    ],
     "limitation": "30m crane lifting height is not the overall building height; bridge figures constrain only the reported component"
+  },
+  "library": {
+    "id": 485337678,
+    "name": "图书馆",
+    "height": 66.7,
+    "levels": 12,
+    "style": "library",
+    "heightConfidence": "Official overall height; podium, fin spacing and wall placement estimated from photos",
+    "reference": "https://www.cqu.edu.cn/zjzd/gyzd/jz_db.htm",
+    "estimated": [
+      "minor dimensions",
+      "unseen rear elevations"
+    ]
+  },
+  "likelou": {
+    "id": 14108774,
+    "name": "理科楼",
+    "height": 31.5,
+    "levels": 7,
+    "style": "teaching",
+    "heightConfidence": "Official overall height and storeys; detailed elevations remain estimated",
+    "reference": "https://www.cqu.edu.cn/zjzd/gyzd/jz_db.htm",
+    "estimated": [
+      "minor dimensions",
+      "unseen rear elevations"
+    ]
+  },
+  "gym": {
+    "id": 1093483967,
+    "name": "体育馆",
+    "height": 24.2,
+    "levels": 3,
+    "style": "gym",
+    "heightConfidence": "Overall height calibrated; roof taper, ribs and stairs estimated from available photo",
+    "reference": "https://www.cqu.edu.cn/zjzd/gyzd/jz_db.htm",
+    "estimated": [
+      "minor dimensions",
+      "unseen rear elevations"
+    ]
+  },
+  "activity": {
+    "id": 774933751,
+    "name": "学生活动中心",
+    "height": 16.5,
+    "levels": 4,
+    "style": "rust",
+    "heightConfidence": "Footprint from OSM, overall height and detailed facade estimated",
+    "reference": "https://www.cqu.edu.cn/zjzd/gyzd/jz_db.htm",
+    "estimated": [
+      "minor dimensions",
+      "unseen rear elevations"
+    ]
+  },
+  "gongke": {
+    "id": 19474686,
+    "name": "工科大楼",
+    "height": 16.5,
+    "levels": 5,
+    "style": "teaching",
+    "heightConfidence": "Current OSM identity only; no verified exterior photo, conservative model",
+    "reference": "https://www.cqu.edu.cn/zjzd/gyzd/jz_db.htm",
+    "estimated": [
+      "minor dimensions",
+      "unseen rear elevations"
+    ]
   }
 }

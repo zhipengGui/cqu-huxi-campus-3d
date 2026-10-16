@@ -1,0 +1,23 @@
+{
+  "asset": "gongke",
+  "buildingId": 19474686,
+  "detail": "far",
+  "courtyards": 1,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -91.39998394343527,
+      -83.13498395425617,
+      0.0
+    ],
+    [
+      91.39864118065515,
+      83.11091932268043,
+      16.34
+    ]
+  ],
+  "triangles": 65401,
+  "bytes": 570488,
+  "materials": 6,
+  "heightConfidence": "Current OSM identity only; no verified exterior photo, conservative model"
+}

@@ -21,11 +21,12 @@ export function flyTo(
   target: THREE.Vector3,
   distance: number,
   durationMs = 1100,
+  direction?: THREE.Vector3,
 ): void {
   cancelFly();
   const startCam = camera.position.clone();
   const startTgt = controls.target.clone();
-  const dir = startCam.clone().sub(startTgt);
+  const dir = direction?.clone() ?? startCam.clone().sub(startTgt);
   if (dir.lengthSq() < 1e-6) dir.set(300, 400, 500);
   dir.normalize();
   // 系统开启「减少动态效果」时直接跳转，不做飞行动画

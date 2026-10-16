@@ -1,0 +1,23 @@
+{
+  "asset": "activity",
+  "buildingId": 774933751,
+  "detail": "far",
+  "courtyards": 0,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -71.97996812384355,
+      -64.96495823925511,
+      0.0
+    ],
+    [
+      71.97965532922336,
+      64.96484358555993,
+      16.34
+    ]
+  ],
+  "triangles": 27628,
+  "bytes": 267816,
+  "materials": 4,
+  "heightConfidence": "Footprint from OSM, overall height and detailed facade estimated"
+}
