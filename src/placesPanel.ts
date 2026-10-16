@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { SceneData } from "./types";
 import type { SearchItem } from "./search";
 import { bboxCenter } from "./sceneBuilder";
+import {sportsSiteAreas,sportsFrame} from './sports';
 
 /** 左侧"校园浏览"面板：分类地点列表，点击丝滑飞行。数据与搜索共用。 */
 
@@ -10,7 +11,8 @@ export type PlaceEntry = SearchItem & {
   num: string;
 };
 
-const GROUP_ORDER = ["教学", "文体", "餐饮", "宿舍", "楼宇", "湖泊", "校门"];
+const GROUP_ORDER = ["教学", "文体", "运动", "餐饮", "宿舍", "楼宇", "湖泊", "校门"];
+const FEATURED=['综合楼','第一教学楼','信息技术科研楼','图书馆','理科楼','工科大楼'];
 
 function groupOfStyle(style: string): string {
   switch (style) {
@@ -79,13 +81,18 @@ export function collectPlaces(
     });
   }
 
-  // 分组内按中文序排序，跨组连续编号（游览站号风格）
+  for(const [name,area]of [['田径场',sportsSiteAreas(data.green)[0]],['室外球场区',data.green.find(a=>a.id===1057528491)]] as const) {
+    const f=area&&sportsFrame(area.outers[0]);if(!f)continue;
+    entries.push({name,kind:'sports',group:'运动',num:'',target:new THREE.Vector3(f.cx,0,-f.cy),
+      distance:300,extent:{width:f.width,length:f.length}});
+  }
+  // 优先展示重点地标，再按中文序排列，编号仍连续。
   const out: PlaceEntry[] = [];
   let num = 1;
   for (const group of GROUP_ORDER) {
     const inGroup = entries
       .filter((e) => e.group === group)
-      .sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
+      .sort((a, b) => ((FEATURED.indexOf(a.name)+1||99)-(FEATURED.indexOf(b.name)+1||99))||a.name.localeCompare(b.name, "zh-Hans-CN"));
     for (const e of inGroup) {
       e.num = String(num).padStart(2, "0");
       num += 1;

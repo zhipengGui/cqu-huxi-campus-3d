@@ -36,8 +36,8 @@ export interface PickerCallbacks {
   onClear: () => void;
 }
 
-const SELECT_EMISSIVE = 0x2a3550;
-const HOVER_EMISSIVE = 0x1c2540;
+const SELECT_EMISSIVE = 0x101b17;
+const HOVER_EMISSIVE = 0x0a100d;
 
 export class BuildingPicker {
   private raycaster = new THREE.Raycaster();

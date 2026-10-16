@@ -8,7 +8,7 @@ const mobileOnly=process.argv.includes('--mobile-only');
 const browser=spawn('C:/Program Files/Google/Chrome/Application/chrome.exe',[
   '--headless=new','--no-first-run','--no-default-browser-check','--no-proxy-server',
   '--remote-allow-origins=http://localhost:'+port,'--remote-debugging-port='+port,
-  '--user-data-dir='+root+'/work/chrome-v8','--window-size=1440,960','about:blank'
+  '--user-data-dir='+root+'/work/chrome-v9-full','--window-size=1440,960','about:blank'
 ],{windowsHide:true,stdio:'ignore'});
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 let ws;const pending=new Map();let seq=0;const errors=[];
@@ -32,7 +32,7 @@ try {
   if(!ready)throw Error('Map not ready: '+await evaluate('document.body.innerText.slice(-1800)'));
   await mkdir(root+'/work/qa',{recursive:true});
   async function capture(name){await delay(1700);const r=await send('Page.captureScreenshot',{format:'png'});await writeFile(root+'/work/qa/'+name+'.png',Buffer.from(r.data,'base64'));}
-  await capture('v8-campus');
+  await capture('v9-campus');
   const checks={};
   async function homeProjection(){return await evaluate(`(async()=>{const data=await(await fetch('data/scene.json')).json(),{Vector3}=await import('/node_modules/.vite/deps/three.js'),h=window.__huxi,w=innerWidth,height=innerHeight,hud=document.querySelector('#hud').getBoundingClientRect();const rect=w>640?{left:hud.right+20,right:w-72,top:24,bottom:height-24}:{left:12,right:w-12,top:60,bottom:hud.top-16};const points=data.boundary.pts.map(([x,y])=>new Vector3(x,0,-y));for(const b of data.buildings.filter(b=>b.inside))for(const [x,y]of b.polygon)points.push(new Vector3(x,b.height,-y));const projected=points.map(p=>{p.project(h.camera);return [(p.x+1)*w/2,(1-p.y)*height/2];});return {inside:projected.every(([x,y])=>x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom),widthRatio:(Math.max(...projected.map(p=>p[0]))-Math.min(...projected.map(p=>p[0])))/(rect.right-rect.left)};})()`);}
   checks.home=await homeProjection();console.log('HOME',JSON.stringify(checks.home));
@@ -45,7 +45,7 @@ try {
     const {BuildingPicker}=await import('/src/interact.ts');const h=window.__huxi,e=h.detailAssets.find(e=>e.asset==='zonghe');
     let mesh;e.far.traverse(m=>{if(m.isMesh&&!mesh)mesh=m;});
     const p=new BuildingPicker(document.createElement('div'),h.camera,e.root,{onSelect(){},onClear(){}});p.select(mesh);
-    let count=0,selected=true;e.far.traverse(m=>{if(m.isMesh){for(const mat of Array.isArray(m.material)?m.material:[m.material])if(mat.emissive){count++;selected&&=mat.emissive.getHex()===0x2a3550;}}});
+    let count=0,selected=true;e.far.traverse(m=>{if(m.isMesh){for(const mat of Array.isArray(m.material)?m.material:[m.material])if(mat.emissive){count++;selected&&=mat.emissive.getHex()===0x101b17;}}});
     p.clearSelection();let restored=true;e.far.traverse(m=>{if(m.isMesh)for(const mat of Array.isArray(m.material)?m.material:[m.material])if(mat.emissive)restored&&=mat.emissive.getHex()===0;});
     return count>1&&selected&&restored;
   })()`),'selection must highlight the whole asset and clear completely');
@@ -55,7 +55,7 @@ try {
   await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'2'}));document.querySelector('#tl-home').click();`);
   for(const [name,label] of (mobileOnly?[]:[['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼'],['library','图书馆'],['likelou','理科楼'],['gym','体育馆'],['activity','学生活动中心'],['gongke','工科大楼'],['gate_north','北门'],['gate_east','东门'],['gate_west','西门']]).slice(0,process.argv.includes('--priority-only')?3:undefined)){
     await evaluate(`document.querySelector('#pd-back').click(); [...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);
-    await delay(2000);await capture('v8-'+name);
+    await delay(2000);await capture('v9-'+name);
     checks[name]=await evaluate(`({title:document.querySelector('#pd-name').textContent, detail:window.__huxi.detailAssets.map(e=>({asset:e.asset,near:!!e.near,farVisible:e.far.visible})), calls:window.__huxi.renderer.info.render.calls,triangles:window.__huxi.renderer.info.render.triangles})`);
     assert.equal(checks[name].title,label);console.log('PLACE',name,'PASS',checks[name].calls,'draw calls');
   }
@@ -64,7 +64,7 @@ try {
     await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();document.querySelector('[data-building-view=court]').click();`);
     const court=await evaluate(`(()=>{const h=window.__huxi,e=h.detailAssets.find(e=>e.asset===${JSON.stringify(asset)}),expected=e.root.localToWorld(e.root.userData.court.clone()),offset=h.camera.position.clone().sub(h.controls.target);if(e.root.userData.courtRadius)expected.y=e.building.height*.35;return {targetError:h.controls.target.distanceTo(expected),elevation:offset.y/offset.length()};})()`);
     assert.ok(court.targetError<.01&&court.elevation>.65&&court.elevation<.85,'close view must show the actual courtyard walls and floor: '+asset);
-    await capture('v8-'+asset+'-courtyard');
+    await capture('v9-'+asset+'-courtyard');
     await evaluate(`document.querySelector('[data-building-view=facade]').click()`);
     const facade=await evaluate(`(()=>{const h=window.__huxi,d=h.camera.position.clone().sub(h.controls.target);return d.y/d.length();})()`);
     assert.ok(facade>0&&facade<.5,'facade view must lower the camera');checks.views[asset]={court,facade};
@@ -119,10 +119,11 @@ try {
   console.log('PERFORMANCE',JSON.stringify(checks.performance));
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await evaluate('window.dispatchEvent(new Event("resize")); document.querySelector("#pd-back").click(); document.querySelector("#search").value="";document.querySelector("#search").dispatchEvent(new Event("input"));document.querySelector("#tl-home").click();');
-  await capture('v8-mobile');
+  await capture('v9-mobile');
+  checks.mobileHome=await homeProjection();assert.ok(checks.mobileHome.inside&&checks.mobileHome.widthRatio>.8,'portrait home framing');
+  await evaluate(`if(document.querySelector('#hud').classList.contains('collapsed'))document.querySelector('#hud-fold').click()`);
   checks.mobileList=await evaluate(`(()=>{const list=document.querySelector('#places').getBoundingClientRect(),toolbar=document.querySelector('#toolbar').getBoundingClientRect();return {listBottom:list.bottom,toolbarTop:toolbar.top};})()`);
   assert.ok(checks.mobileList.listBottom<=checks.mobileList.toolbarTop,'phone place list must stop above navigation controls');
-  checks.mobileHome=await homeProjection();assert.ok(checks.mobileHome.inside&&checks.mobileHome.widthRatio>.8,'portrait home framing');
   checks.mobile={};
   for(const [asset,label] of [['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼'],['library','图书馆']]) {
     await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);
@@ -134,7 +135,7 @@ try {
     checks.mobile[asset]=result;console.log('MOBILE',asset,JSON.stringify(result));
     assert.ok(result.points.every(([x,y])=>x>=0&&x<=390&&y>=50&&y<=result.hudTop),'portrait building must fit above HUD: '+asset);
     assert.ok(result.flyBottom<=832&&result.flyTop>=result.hudTop,'detail action must be reachable: '+asset);
-    await capture('v8-mobile-'+asset);
+    await capture('v9-mobile-'+asset);
   }
   console.log('ERRORS',JSON.stringify(errors));
   await writeFile(root+'/work/qa/browser-check.json',JSON.stringify({ready,errors,checks},null,2));

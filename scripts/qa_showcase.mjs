@@ -27,6 +27,17 @@ try {
   const prefix=baseline?'v9-before':'v9';
   async function capture(name){await delay(900);const r=await send('Page.captureScreenshot',{format:'png'});await writeFile(root+'/work/qa/'+prefix+'-'+name+'.png',Buffer.from(r.data,'base64'));}
   await capture('campus');
+  if(process.argv.includes('--ui')) {
+    assert.ok(await evaluate(`!!document.querySelector('#brand')&&document.querySelector('#brand').textContent.includes('虎溪')`),'showcase needs a visible campus identity');
+    await evaluate(`document.querySelector('[data-shortcut="田径场"]').click()`);
+    assert.equal(await evaluate(`document.querySelector('#pd-name').textContent`),'田径场');
+    assert.match(await evaluate(`document.querySelector('#pd-meta').textContent`),/运动/);
+    assert.ok(await evaluate(`getComputedStyle(document.querySelector('.building-views')).display==='none'`),'sports details must not expose building-only views');
+    const before=await evaluate('window.__huxi.controls.target.toArray()');
+    await evaluate(`document.querySelector('#pd-fly').click()`);
+    assert.deepEqual(await evaluate('window.__huxi.controls.target.toArray()'),before,'fly action must return to the selected sports place');
+    await evaluate(`document.querySelector('#pd-back').click();document.querySelector('#tl-home').click()`);
+  }
   async function pose(x,y,north,dx,dy,dz){
     await evaluate(`(()=>{const h=window.__huxi;h.camera.setViewOffset(innerWidth,innerHeight,-130,0,innerWidth,innerHeight);h.controls.target.set(${x},${y},${-north});h.camera.position.copy(h.controls.target).add({x:${dx},y:${dy},z:${dz}});h.controls.update();})()`);
   }
@@ -38,6 +49,19 @@ try {
   for(const [name,label]of [['library','图书馆'],['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼']]) {
     await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);
     await capture(name);
+  }
+  if(process.argv.includes('--ui')) {
+    await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+    await send('Page.reload',{ignoreCache:true});
+    for(let i=0;i<100;i++){await delay(250);if(await evaluate('!!window.__huxi && document.querySelector("#hud-stats").textContent.startsWith("楼栋")'))break;}
+    assert.ok(await evaluate(`document.querySelector('#hud').classList.contains('collapsed')&&document.querySelector('#hud').getBoundingClientRect().height<100`),'phone should start with a compact browser bar');
+    await capture('mobile');
+    await evaluate(`document.querySelector('#tl-more').click()`);
+    assert.ok(await evaluate(`document.querySelector('#tl-more').getAttribute('aria-expanded')==='true'&&document.querySelector('#tl-share').getBoundingClientRect().width>0`),'phone secondary tools must be reachable');
+    await evaluate(`document.querySelector('#tl-more').click();document.querySelector('#hud-fold').click();document.querySelector('[data-shortcut="田径场"]').click()`);
+    assert.equal(await evaluate(`document.querySelector('#pd-name').textContent`),'田径场');
+    assert.ok(await evaluate(`!document.querySelector('#hud').classList.contains('collapsed')`),'place selection must reveal its details');
+    await capture('mobile-sports');checks.mobileUI=true;
   }
   assert.equal(errors.length,0,'browser exceptions');
   await writeFile(root+'/work/qa/'+prefix+'-showcase-check.json',JSON.stringify({ready,errors,checks},null,2));

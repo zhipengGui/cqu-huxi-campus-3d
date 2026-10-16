@@ -37,6 +37,10 @@ import { facadeTexture, roofMaterial } from "./facades";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const statsEl = document.querySelector<HTMLDivElement>("#hud-stats")!;
 const navStatusEl = document.querySelector<HTMLDivElement>("#nav-status")!;
+const mobileLayout=window.matchMedia('(max-width:640px)');
+const hud=document.querySelector<HTMLElement>('#hud')!;
+hud.classList.toggle('collapsed',mobileLayout.matches);
+document.querySelector('#hud-fold')!.setAttribute('aria-expanded',String(!mobileLayout.matches));
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -102,6 +106,7 @@ window.addEventListener("resize", () => {
   resize();
   if (document.querySelector("#hud")!.classList.contains("detail-mode")) {
     if (flyTargetBuilding) focusBuilding(flyTargetBuilding, lastBuildingView);
+    else if (selectedPlace) focusPlace(selectedPlace);
   } else homeView();
 });
 resize();
@@ -138,6 +143,7 @@ let panel: PlacesPanel | null = null;
 let places: PlaceEntry[] = [];
 let boundaryLine: THREE.LineLoop | null = null;
 let lastBuildingView = "overview";
+let selectedPlace:SearchItem|null=null;
 
 // ---- 图层分组 ----
 const gGreen = new THREE.Group();
@@ -256,13 +262,17 @@ function fallbackLandmark(b: Building): THREE.Group {
 
 // ---- 详情卡（面板内 gxu 式）----
 function openDetail(it: PlaceEntry): void {
+  selectedPlace=it;
   flyTargetBuilding = it.mesh ?? null;
   const hud = document.querySelector("#hud")!;
+  hud.classList.remove('collapsed');
+  document.querySelector('#hud-fold')!.setAttribute('aria-expanded','true');
   hud.classList.add("detail-mode");
   document.querySelector("#place-detail")!.classList.add("open");
   (document.querySelector("#pd-num") as HTMLElement)!.textContent = it.num;
   document.querySelector("#pd-name")!.textContent = it.name;
-  const meta: string[] = [it.kind === "water" ? "湖泊" : it.kind === "gate" ? "校门" : "建筑"];
+  const meta: string[] = [it.kind === "water" ? "湖泊" : it.kind === "gate" ? "校门" : it.kind==='sports'?'运动场地':"建筑"];
+  (document.querySelector('.building-views') as HTMLElement).style.display=it.mesh?'flex':'none';
   if (it.mesh) {
     const d = it.mesh.userData as BuildingUserData;
     meta.push(`${d.height} m`, `${d.area.toLocaleString()} m²`);
@@ -281,6 +291,7 @@ function openDetail(it: PlaceEntry): void {
 }
 
 function closeDetail(): void {
+  selectedPlace=null;
   labels.active = "";
   flyTargetBuilding = null;
   document.querySelector("#hud")!.classList.remove("detail-mode");
@@ -291,8 +302,8 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
   if (!mesh) return;
   lastBuildingView = view;
   const box = boundsOf(mesh);
-  const usableWidth = window.innerWidth > 640 ? Math.max(240, window.innerWidth - 350) : window.innerWidth;
-  const usableHeight = window.innerWidth > 640 ? window.innerHeight : window.innerHeight * .48;
+  const rect=mapRect();
+  const usableWidth=rect.right-rect.left,usableHeight=rect.bottom-rect.top;
   const fit = frameBox(box, camera.fov, {width: window.innerWidth, height: window.innerHeight, usableWidth, usableHeight});
   const center = fit.target;
   let distance = fit.distance;
@@ -308,18 +319,33 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
     }
   }
   // Compose into the actual free area, not behind the side/bottom panel.
-  camera.setViewOffset(window.innerWidth, window.innerHeight,
-    window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .18 : 0,
-    window.innerWidth, window.innerHeight);
+  composeRect(rect);
   flyTo(camera, controls, center, distance, 1100, dir);
 }
 
+function mapRect() {
+  const width=window.innerWidth,height=window.innerHeight,panel=hud.getBoundingClientRect();
+  const brand=document.querySelector('#brand')!.getBoundingClientRect();
+  return width>640?{left:hud.classList.contains('collapsed')?24:panel.right+20,right:width-72,top:brand.bottom+18,bottom:height-24}
+    :{left:12,right:width-12,top:Math.max(brand.bottom+16,72),bottom:Math.min(height-24,panel.top-16)};
+}
+function composeRect(rect:ReturnType<typeof mapRect>):void {
+  camera.setViewOffset(innerWidth,innerHeight,innerWidth/2-(rect.left+rect.right)/2,innerHeight/2-(rect.top+rect.bottom)/2,innerWidth,innerHeight);
+}
+function focusPlace(it:SearchItem):void {
+  if(it.mesh){focusBuilding(it.mesh);return;}
+  const rect=mapRect();composeRect(rect);
+  let distance=it.distance;
+  if(it.extent) {
+    const {width,length}=it.extent;
+    const box=new THREE.Box3(it.target.clone().add(new THREE.Vector3(-width/2,0,-length/2)),it.target.clone().add(new THREE.Vector3(width/2,5,length/2)));
+    distance=frameBox(box,camera.fov,{width:innerWidth,height:innerHeight,usableWidth:rect.right-rect.left,usableHeight:rect.bottom-rect.top}).distance;
+  }
+  flyTo(camera,controls,it.target,distance,1100,new THREE.Vector3(.35,1.3,1));
+}
 function homeView(): void {
   if (!campusPoints.length) return;
-  const width=window.innerWidth,height=window.innerHeight,hud=document.querySelector("#hud")!;
-  const collapsed=hud.classList.contains("collapsed"),panel=hud.getBoundingClientRect();
-  const rect=width>640?{left:collapsed?24:panel.right+20,right:width-72,top:collapsed?75:24,bottom:height-24}
-    :{left:12,right:width-12,top:60,bottom:Math.min(height-24,panel.top-16)};
+  const width=window.innerWidth,height=window.innerHeight,rect=mapRect();
   const direction=new THREE.Vector3(.28,1.45,1);
   const fit=framePoints(campusPoints,camera.fov,{width,height},rect,direction);
   camera.setViewOffset(width,height,fit.offset.x,fit.offset.y,width,height);
@@ -334,9 +360,8 @@ function selectPlace(it: SearchItem): void {
   }
   if (it.mesh) picker?.select(it.mesh);
   else picker?.clearSelection();
-  if (it.mesh) focusBuilding(it.mesh);
-  else flyTo(camera, controls, it.target, it.distance);
   openDetail(it as PlaceEntry);
+  focusPlace(it);
 }
 
 // ---- 场景加载 ----
@@ -409,7 +434,7 @@ async function loadScene(): Promise<void> {
     if (!d.name || d.name.includes("门")) return;
     if (!byName.has(d.name)) byName.set(d.name, mesh);
   });
-  places = collectPlaces({...data, water: campusWater}, byName);
+  places = collectPlaces({...data, water: campusWater,green:campusGreen}, byName);
   tourStops = TOUR_STOPS.map((s) => places.find((p) => p.name === s.name)).filter(
     (p): p is PlaceEntry => !!p,
   );
@@ -442,6 +467,8 @@ async function loadScene(): Promise<void> {
   });
 
   // 标注：楼名（楼顶）+ 湖名
+  for(const place of places.filter(p=>p.kind==='sports'))labels.add(place.name,place.target.clone().setY(3),6000,
+    {cls:'sports',priority:3,onClick:()=>selectPlace(place)});
   for (const [name, mesh] of byName) {
     const box = boundsOf(mesh);
     const pos = box.getCenter(new THREE.Vector3()); pos.y = box.max.y + 5;
@@ -508,7 +535,7 @@ const LAYER_DEFS: LayerDef[] = [
   { name: "树木", desc: "示意绿荫分布", get: () => gTrees.visible, set: (v) => { gTrees.visible = v; } },
   { name: "道路与桥梁", desc: "车行道与步行道", get: () => gRoads.visible, set: (v) => { gRoads.visible = v; } },
   { name: "湖塘水面", desc: "缙湖、云湖等水面", get: () => gWater.visible, set: (v) => { gWater.visible = v; } },
-  { name: "运动场地", desc: "田径场与球场", get: () => gSports.visible, set: (v) => { gSports.visible = v; } },
+  { name: "运动场地", desc: "田径跑道与室外球场", get: () => gSports.visible, set: (v) => { gSports.visible = v; } },
   { name: "周边环境", desc: "校界约200米内的简化建筑、道路与地表", get: () => gContext.visible, set: (v) => { gContext.visible = v; } },
 ];
 
@@ -666,7 +693,7 @@ document.querySelector("#pd-back")!.addEventListener("click", () => {
 let flyTargetBuilding: THREE.Mesh | null = null;
 document.querySelector("#pd-fly")!.addEventListener("click", () => {
   if (flyTargetBuilding) focusBuilding(flyTargetBuilding);
-  else if (places[tour.index]) flyTo(camera, controls, places[tour.index].target, places[tour.index].distance);
+  else if (selectedPlace) focusPlace(selectedPlace);
 });
 
 // ---- 导航 ----
@@ -690,7 +717,19 @@ document.querySelector("#nav-exit")!.addEventListener("click", () => setNavMode(
 // ---- 折叠 ----
 document.querySelector<HTMLButtonElement>("#hud-fold")!.addEventListener("click", () => {
   document.querySelector("#hud")!.classList.toggle("collapsed");
+  document.querySelector('#hud-fold')!.setAttribute('aria-expanded',String(!hud.classList.contains('collapsed')));
   if (!document.querySelector("#hud")!.classList.contains("detail-mode")) homeView();
+});
+mobileLayout.addEventListener('change',()=>{
+  if(!hud.classList.contains('detail-mode')){hud.classList.toggle('collapsed',mobileLayout.matches);homeView();}
+  document.querySelector('#hud-fold')!.setAttribute('aria-expanded',String(!hud.classList.contains('collapsed')));
+});
+for(const button of document.querySelectorAll<HTMLButtonElement>('[data-shortcut]'))button.addEventListener('click',()=>{
+  const it=places.find(p=>p.name===button.dataset.shortcut);if(it)selectPlace(it);
+});
+document.querySelector('#tl-more')!.addEventListener('click',()=>{
+  const open=document.querySelector('#tools')!.classList.toggle('open');
+  document.querySelector('#tl-more')!.setAttribute('aria-expanded',String(open));
 });
 
 // ---- 右侧控件 ----
@@ -711,6 +750,8 @@ document.querySelector("#tl-compass")!.addEventListener("click", () => {
 });
 document.querySelector("#tl-home")!.addEventListener("click", () => {
   setTour(false);
+  picker?.clearSelection();
+  if(mobileLayout.matches){hud.classList.add('collapsed');document.querySelector('#hud-fold')!.setAttribute('aria-expanded','false');}
   homeView();
 });
 document.querySelector("#tl-fs")!.addEventListener("click", () => {

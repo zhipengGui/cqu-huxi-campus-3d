@@ -61,12 +61,14 @@ export class LabelLayer {
     const occupied: { left: number; right: number; top: number; bottom: number }[] = [];
     const panel = document.querySelector("#hud")?.getBoundingClientRect();
     if (panel) occupied.push(panel);
+    for(const id of ['#brand','#tools']){const r=document.querySelector(id)?.getBoundingClientRect();if(r)occupied.push(r);}
     const entries = [...this.entries].sort((a,b) =>
       ((b.text === this.active ? 100 : b.priority) - (a.text === this.active ? 100 : a.priority)) ||
       camera.position.distanceTo(a.pos)-camera.position.distanceTo(b.pos));
     let count = 0;
     const overview=camera.position.distanceTo(target)>1700;
     for (const e of entries) {
+      e.obj.element.classList.toggle('active',e.text===this.active);
       e.obj.visible = false;
       if (!this.enabled || camera.position.distanceTo(e.pos) >= e.limit) continue;
       if (overview && e.priority<3 && e.text!==this.active) continue;
