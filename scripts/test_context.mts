@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { Group } from 'three';
+import { buildSportsMarks } from '../src/sports.ts';
+import { campusAreas } from '../src/campusClip.ts';
+const data=JSON.parse(readFileSync(new URL('../public/data/scene.json',import.meta.url),'utf8'));
+const areas=campusAreas(data.green,data.boundary.pts);
+assert.ok(!areas.some(a=>a.id===722690704),'unverified field 449m outside campus must be excluded');
+assert.ok(areas.some(a=>a.sport==='basketball'),'retain mapped campus basketball courts');
+const group=new Group();
+buildSportsMarks(group,[{id:1,name:'',kind:'pitch',outers:[[[0,0],[120,0],[120,180],[0,180]]],inners:[]}]);
+assert.equal(group.children.length,0,'an untyped large pitch is not evidence of a running track');
+console.log('PASS exterior sports exclusion, campus courts retained, no area-based track guessing');

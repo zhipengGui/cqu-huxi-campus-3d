@@ -446,7 +446,7 @@ export function buildSportsMarks(parent: THREE.Object3D, green: Area[]): void {
     const cy = (y0 + y1) / 2;
     const area = bw * bh;
 
-    if (a.kind === "pitch" && !a.sport && area >= 15000) {
+    if (a.kind === "track" && (a.sport === "running" || a.sport === "athletics") && area >= 15000) {
       const R = Math.min(44, bw / 2 - 10.2);
       const hs = Math.max(bh / 2 - (R + 9.76), 20);
       athleticsTrack(marks, buckets, cx, cy, hs, R);

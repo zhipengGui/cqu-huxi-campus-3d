@@ -3,7 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { boundsOf, frameBox, placeRoot } from "./landmarkViews";
-import { clipRoads, inCampus } from "./campusClip";
+import { clipRoads, campusAreas, inCampus } from "./campusClip";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { SceneData, Building, Gate } from "./types";
 import {
@@ -335,17 +335,12 @@ async function loadScene(): Promise<void> {
     const campusGround = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color: 0xb4c59e}));
     campusGround.position.y = -.15; campusGround.receiveShadow = true; scene.add(campusGround);
   }
-  const campusGreen = data.green.filter(a => {
-    const outer = a.outers[0];
-    if (!outer || a.inside === false) return false;
-    // Preserve the sports locations already accepted in v6 while other exterior greenery is subdued.
-    if (a.kind === "pitch" || a.kind === "pool") return true;
-    return !data.boundary || inCampus(bboxCenter(outer), data.boundary.pts);
-  });
+  const campusGreen = campusAreas(data.green, data.boundary?.pts);
+  const campusWater = campusAreas(data.water, data.boundary?.pts);
   buildGreen(gGreen, gSports, campusGreen);
   buildSportsMarks(gSports, campusGreen);
-  buildPaving(gRoads, data.paving);
-  buildWater(gWater, data.water.filter(a => a.inside !== false));
+  buildPaving(gRoads, campusAreas(data.paving, data.boundary?.pts));
+  buildWater(gWater, campusWater);
   buildRoads(gRoads, data.boundary ? clipRoads(data.roads, data.boundary.pts) : data.roads);
 
   if (data.boundary) {
@@ -397,7 +392,7 @@ async function loadScene(): Promise<void> {
     if (!d.name || d.name.includes("门")) return;
     if (!byName.has(d.name)) byName.set(d.name, mesh);
   });
-  places = collectPlaces(data, byName);
+  places = collectPlaces({...data, water: campusWater}, byName);
   tourStops = TOUR_STOPS.map((s) => places.find((p) => p.name === s.name)).filter(
     (p): p is PlaceEntry => !!p,
   );
@@ -435,7 +430,7 @@ async function loadScene(): Promise<void> {
     const pos = box.getCenter(new THREE.Vector3()); pos.y = box.max.y + 5;
     labels.add(name, pos, 3400, { priority: mesh.userData.pickRoot ? 5 : 1, onClick: () => { picker!.select(mesh); focusBuilding(mesh); } });
   }
-  for (const w of data.water) {
+  for (const w of campusWater) {
     if (!w.name || w.inside === false) continue;
     const [cx, cy] = bboxCenter(w.outers[0]);
     labels.add(w.name, new THREE.Vector3(cx, 2, -cy), 2000, {

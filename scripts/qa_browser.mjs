@@ -8,7 +8,7 @@ const mobileOnly=process.argv.includes('--mobile-only');
 const browser=spawn('C:/Program Files/Google/Chrome/Application/chrome.exe',[
   '--headless=new','--no-first-run','--no-default-browser-check','--no-proxy-server',
   '--remote-allow-origins=http://localhost:'+port,'--remote-debugging-port='+port,
-  '--user-data-dir='+root+'/work/chrome-v7','--window-size=1440,960','about:blank'
+  '--user-data-dir='+root+'/work/chrome-v8','--window-size=1440,960','about:blank'
 ],{windowsHide:true,stdio:'ignore'});
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 let ws;const pending=new Map();let seq=0;const errors=[];
@@ -32,7 +32,7 @@ try {
   if(!ready)throw Error('Map not ready: '+await evaluate('document.body.innerText.slice(-1800)'));
   await mkdir(root+'/work/qa',{recursive:true});
   async function capture(name){await delay(1700);const r=await send('Page.captureScreenshot',{format:'png'});await writeFile(root+'/work/qa/'+name+'.png',Buffer.from(r.data,'base64'));}
-  await capture('v7-campus');
+  await capture('v8-campus');
   const checks={};
   assert.ok(await evaluate(`(async()=>{
     const {BuildingPicker}=await import('/src/interact.ts');const h=window.__huxi,e=h.detailAssets.find(e=>e.asset==='zonghe');
@@ -48,7 +48,7 @@ try {
   await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'2'}));document.querySelector('#tl-home').click();`);
   for(const [name,label] of mobileOnly?[]:[['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼'],['library','图书馆'],['likelou','理科楼'],['gym','体育馆'],['activity','学生活动中心'],['gongke','工科大楼'],['gate_north','北门'],['gate_east','东门'],['gate_west','西门']]){
     await evaluate(`document.querySelector('#pd-back').click(); [...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);
-    await delay(2000);await capture('v7-'+name);
+    await delay(2000);await capture('v8-'+name);
     checks[name]=await evaluate(`({title:document.querySelector('#pd-name').textContent, detail:window.__huxi.detailAssets.map(e=>({asset:e.asset,near:!!e.near,farVisible:e.far.visible})), calls:window.__huxi.renderer.info.render.calls,triangles:window.__huxi.renderer.info.render.triangles})`);
     assert.equal(checks[name].title,label);console.log('PLACE',name,'PASS',checks[name].calls,'draw calls');
   }
@@ -57,7 +57,7 @@ try {
     await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();document.querySelector('[data-building-view=court]').click();`);
     const court=await evaluate(`(()=>{const h=window.__huxi,e=h.detailAssets.find(e=>e.asset===${JSON.stringify(asset)}),expected=e.root.localToWorld(e.root.userData.court.clone()),offset=h.camera.position.clone().sub(h.controls.target);return {targetError:h.controls.target.distanceTo(expected),elevation:offset.y/offset.length()};})()`);
     assert.ok(court.targetError<.01&&court.elevation>.85,'close view must target an actual courtyard: '+asset);
-    await capture('v7-'+asset+'-courtyard');
+    await capture('v8-'+asset+'-courtyard');
     await evaluate(`document.querySelector('[data-building-view=facade]').click()`);
     const facade=await evaluate(`(()=>{const h=window.__huxi,d=h.camera.position.clone().sub(h.controls.target);return d.y/d.length();})()`);
     assert.ok(facade>0&&facade<.5,'facade view must lower the camera');checks.views[asset]={court,facade};
@@ -101,7 +101,7 @@ try {
   console.log('PERFORMANCE',JSON.stringify(checks.performance));
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await evaluate('window.dispatchEvent(new Event("resize")); document.querySelector("#pd-back").click(); document.querySelector("#tl-home").click();');
-  await capture('v7-mobile');
+  await capture('v8-mobile');
   checks.mobile={};
   for(const [asset,label] of [['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼'],['library','图书馆']]) {
     await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);
@@ -113,7 +113,7 @@ try {
     checks.mobile[asset]=result;console.log('MOBILE',asset,JSON.stringify(result));
     assert.ok(result.points.every(([x,y])=>x>=0&&x<=390&&y>=50&&y<=result.hudTop),'portrait building must fit above HUD: '+asset);
     assert.ok(result.flyBottom<=832&&result.flyTop>=result.hudTop,'detail action must be reachable: '+asset);
-    await capture('v7-mobile-'+asset);
+    await capture('v8-mobile-'+asset);
   }
   console.log('ERRORS',JSON.stringify(errors));
   await writeFile(root+'/work/qa/browser-check.json',JSON.stringify({ready,errors,checks},null,2));

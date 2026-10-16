@@ -1,5 +1,16 @@
-import type { Road } from './types';
+import type { Road, Area } from './types';
 type Point = [number,number];
+
+export function areaCenter(area: Area): Point {
+  const ring=area.outers[0];
+  return [(Math.min(...ring.map(p=>p[0]))+Math.max(...ring.map(p=>p[0])))/2,
+    (Math.min(...ring.map(p=>p[1]))+Math.max(...ring.map(p=>p[1])))/2];
+}
+
+/** All campus surfaces follow the same boundary policy, including sport facilities. */
+export function campusAreas(areas: Area[], ring?: Point[]): Area[] {
+  return areas.filter(a=>a.outers[0]?.length && (!ring || inCampus(areaCenter(a),ring)));
+}
 
 export function inCampus([x,y]: Point, ring: Point[]): boolean {
   let hit=false;
