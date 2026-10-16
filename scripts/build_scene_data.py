@@ -426,6 +426,9 @@ def main():
                 h = round(float(ov["height"]), 1)
                 src = "override"
         landmark = ""
+        priority_ids = {13986652: "teaching1", 14566184: "info", 19474686: "gongke"}
+        if inside and b["id"] in priority_ids:
+            landmark = priority_ids[b["id"]]
         if inside and b["name"] == "图书馆":
             landmark = "library"
         elif inside and b["name"] == "学生活动中心":

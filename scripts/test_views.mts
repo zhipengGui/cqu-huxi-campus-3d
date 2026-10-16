@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { Box3, Vector3 } from 'three';
+import { frameBox } from '../src/landmarkViews.ts';
+const box = new Box3(new Vector3(10,0,20),new Vector3(210,30,120));
+const desktop = frameBox(box,50,1.5);
+const portrait = frameBox(box,50,.55);
+assert.deepEqual(desktop.target.toArray(),[110,15,70]);
+assert.ok(portrait.distance>desktop.distance,'portrait must fit the full building');
+assert.ok(desktop.distance>Math.hypot(200,30,100)/2);
+console.log('PASS full model framing and portrait fit');

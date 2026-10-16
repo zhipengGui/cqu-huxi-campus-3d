@@ -1,0 +1,23 @@
+{
+  "asset": "info",
+  "buildingId": 14566184,
+  "detail": "far",
+  "courtyards": 1,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -83.24499980534172,
+      -43.29499976526438,
+      0.0
+    ],
+    [
+      83.24499975369339,
+      43.294999792093165,
+      26.4
+    ]
+  ],
+  "triangles": 106258,
+  "bytes": 632972,
+  "materials": 8,
+  "heightConfidence": "OSM levels × 3.3m; not surveyed"
+}

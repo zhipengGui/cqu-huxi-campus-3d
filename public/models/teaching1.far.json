@@ -1,0 +1,23 @@
+{
+  "asset": "teaching1",
+  "buildingId": 13986652,
+  "detail": "far",
+  "courtyards": 2,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -124.78661795512647,
+      -53.38999895951644,
+      0.0
+    ],
+    [
+      124.79499997662684,
+      53.38158787185672,
+      16.34
+    ]
+  ],
+  "triangles": 66608,
+  "bytes": 463448,
+  "materials": 6,
+  "heightConfidence": "Five storeys officially documented; 3.3m storeys estimated"
+}

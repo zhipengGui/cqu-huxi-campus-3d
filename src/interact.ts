@@ -86,7 +86,12 @@ export class BuildingPicker {
   private cast(ndcX: number, ndcY: number): THREE.Mesh | null {
     this.raycaster.setFromCamera(this.pointerNdc.set(ndcX, ndcY), this.camera);
     const hits = this.raycaster.intersectObjects(this.group.children, true);
-    return (hits[0]?.object as THREE.Mesh) ?? null;
+    const hit = hits.find((entry) => {
+      let object: THREE.Object3D | null = entry.object;
+      while (object) { if (!object.visible) return false; object = object.parent; }
+      return true;
+    });
+    return (hit?.object as THREE.Mesh) ?? null;
   }
 
   private updateHover(): void {

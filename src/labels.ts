@@ -7,6 +7,8 @@ interface Entry {
   obj: CSS2DObject;
   pos: THREE.Vector3;
   limit: number;
+  text: string;
+  priority: number;
 }
 
 export class LabelLayer {
@@ -15,6 +17,8 @@ export class LabelLayer {
   readonly root = new THREE.Group();
   private entries: Entry[] = [];
   enabled = true;
+  active = "";
+  private lastUpdate = 0;
 
   constructor(container: HTMLElement) {
     this.renderer = new CSS2DRenderer();
@@ -32,7 +36,7 @@ export class LabelLayer {
     text: string,
     pos: THREE.Vector3,
     limit: number,
-    opts?: { cls?: string; onClick?: () => void },
+    opts?: { cls?: string; onClick?: () => void; priority?: number },
   ): void {
     const div = document.createElement("div");
     div.className = "map-label " + (opts?.cls ?? "");
@@ -47,12 +51,32 @@ export class LabelLayer {
     const obj = new CSS2DObject(div);
     obj.position.copy(pos);
     this.root.add(obj);
-    this.entries.push({ obj, pos, limit });
+    this.entries.push({ obj, pos, limit, text, priority: opts?.priority ?? (opts?.cls === "gate" ? 4 : 2) });
   }
 
   update(camera: THREE.Camera): void {
-    for (const e of this.entries) {
-      e.obj.visible = this.enabled && camera.position.distanceTo(e.pos) < e.limit;
+    const now = performance.now();
+    if (now - this.lastUpdate < 90) return;
+    this.lastUpdate = now;
+    const occupied: { left: number; right: number; top: number; bottom: number }[] = [];
+    const panel = document.querySelector("#hud")?.getBoundingClientRect();
+    if (panel) occupied.push(panel);
+    const entries = [...this.entries].sort((a,b) =>
+      ((b.text === this.active ? 100 : b.priority) - (a.text === this.active ? 100 : a.priority)) ||
+      camera.position.distanceTo(a.pos)-camera.position.distanceTo(b.pos));
+    let count = 0;
+    for (const e of entries) {
+      e.obj.visible = false;
+      if (!this.enabled || camera.position.distanceTo(e.pos) >= e.limit) continue;
+      const p = e.pos.clone().project(camera);
+      if (p.z < -1 || p.z > 1) continue;
+      const x = (p.x+1)*window.innerWidth/2, y = (1-p.y)*window.innerHeight/2;
+      const w = Math.max(e.obj.element.offsetWidth, e.text.length*12+18);
+      const rect = {left:x-w/2-5, right:x+w/2+5, top:y-16, bottom:y+16};
+      if (rect.left < 6 || rect.right > window.innerWidth-65 || rect.top < 6 || rect.bottom > window.innerHeight-20) continue;
+      if (occupied.some(r => rect.left < r.right && rect.right > r.left && rect.top < r.bottom && rect.bottom > r.top)) continue;
+      if (count >= (window.innerWidth < 640 ? 7 : 14)) continue;
+      occupied.push(rect); count++; e.obj.visible = true;
     }
   }
 

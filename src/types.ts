@@ -15,7 +15,7 @@ export interface Building {
   inside: boolean;
   type: string;
   style: string;
-  landmark: string; // "" | "library" | "activity" | "gym"
+  landmark: string; // stable landmark asset key
   height: number;
   heightSource: "tag:height" | "tag:levels" | "default" | "override";
   area: number;

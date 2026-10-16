@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { boundsOf, frameBox } from "./landmarkViews";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { SceneData, Building, Gate } from "./types";
 import {
@@ -39,11 +42,19 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
 app.appendChild(renderer.domElement);
 renderer.domElement.tabIndex = 0;
 renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus());
 
 const scene = new THREE.Scene();
+const environment = new RoomEnvironment();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(environment, .04).texture;
+scene.environmentIntensity = .30;
+environment.dispose();
+pmrem.dispose();
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 2, 9000);
 const HOME_VIEW = { pos: new THREE.Vector3(650, 620, 1050), target: new THREE.Vector3(0, 10, 0) };
@@ -70,7 +81,7 @@ sun.shadow.camera.bottom = -1700;
 sun.shadow.camera.near = 10;
 sun.shadow.camera.far = 4500;
 sun.shadow.bias = -0.0006;
-sun.shadow.normalBias = 1.5;
+sun.shadow.normalBias = .18;
 scene.add(sun);
 scene.add(sun.target);
 
@@ -127,7 +138,11 @@ scene.add(gGreen, gSports, gWater, gRoads, gTrees, gContext);
 
 // ---- GLB ----
 const gltfLoader = new GLTFLoader();
-const GLB_LANDMARKS = new Set(["library", "info", "gym", "gongke", "activity"]);
+const GLB_LANDMARKS = new Set(["library", "info", "gym", "gongke", "activity", "zonghe", "teaching1"]);
+const PRIORITY_ASSETS = new Set(["zonghe", "teaching1", "info"]);
+const draco = new DRACOLoader().setDecoderPath(import.meta.env.BASE_URL + "draco/");
+gltfLoader.setDRACOLoader(draco);
+const detailAssets: { root: THREE.Group; far: THREE.Group; asset: string; building: Building; near?: THREE.Group; requested: boolean }[] = [];
 const GLB_GATES: Record<string, string> = { 北门: "gate_north", 东门: "gate_east", 西门: "gate_west" };
 
 function bboxCenterOfBuilding(b: Building): [number, number] {
@@ -139,32 +154,46 @@ function bboxCenterOfBuilding(b: Building): [number, number] {
   return [(x0 + x1) / 2, (y0 + y1) / 2];
 }
 
-function loadLandmarkGLB(asset: string, b: Building): Promise<THREE.Group | null> {
-  return new Promise((resolve) => {
-    if (!GLB_LANDMARKS.has(asset)) return resolve(null);
-    gltfLoader.load(
-      "models/" + asset + ".glb",
-      (gltf) => {
-        const g = gltf.scene;
-        const [cx, cy] = bboxCenterOfBuilding(b);
-        g.position.set(cx, 0, -cy);
-        g.traverse((o) => {
-          const mesh = o as THREE.Mesh;
-          if (mesh.isMesh) {
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            const d = mesh.userData;
-            d.id = b.id; d.name = b.name; d.type = b.type;
-            d.style = "library"; d.height = b.height; d.heightSource = b.heightSource;
-            d.area = b.area; d.cx = cx; d.cy = -cy;
-          }
-        });
-        resolve(g);
-      },
-      undefined,
-      () => resolve(null),
-    );
+function tagAsset(g: THREE.Group, b: Building, root: THREE.Group): void {
+  const [cx, cy] = bboxCenterOfBuilding(b);
+  g.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    Object.assign(mesh.userData, { id: b.id, name: b.name, type: b.type, style: b.style,
+      height: b.height, heightSource: b.heightSource, area: b.area, cx, cy: -cy, pickRoot: root });
   });
+}
+
+async function loadLandmarkGLB(asset: string, b: Building): Promise<THREE.Group | null> {
+  if (!GLB_LANDMARKS.has(asset)) return null;
+  const priority = PRIORITY_ASSETS.has(asset);
+  try {
+    const gltf = await gltfLoader.loadAsync("models/" + asset + (priority ? ".far" : "") + ".glb");
+    const root = new THREE.Group();
+    const [cx, cy] = bboxCenterOfBuilding(b);
+    root.position.set(cx, 0, -cy); root.name = b.name;
+    root.add(gltf.scene); tagAsset(gltf.scene, b, root);
+    if (priority) detailAssets.push({root, far: gltf.scene, asset, building: b, requested: false});
+    return root;
+  } catch (error) {
+    console.warn("地标模型加载失败，使用回退建筑", asset, error);
+    return null;
+  }
+}
+
+function updateDetailAssets(): void {
+  for (const entry of detailAssets) {
+    const close = resolveHighQuality() && camera.position.distanceTo(entry.root.position) < 650;
+    if (entry.near) { entry.near.visible = close; entry.far.visible = !close; }
+    else if (close && !entry.requested) {
+      entry.requested = true;
+      void gltfLoader.loadAsync("models/" + entry.asset + ".glb").then((gltf) => {
+        entry.near = gltf.scene; tagAsset(gltf.scene, entry.building, entry.root);
+        entry.root.add(gltf.scene);
+      }).catch(() => { /* Far model remains usable if the detail request fails. */ });
+    }
+  }
 }
 
 function loadGateGLB(asset: string, gate: Gate): Promise<THREE.Group | null> {
@@ -227,6 +256,10 @@ function openDetail(it: PlaceEntry): void {
     info?.desc ?? "介绍待补充，欢迎提供资料。";
   const photo = document.querySelector("#pd-photo") as HTMLElement;
   photo.style.backgroundImage = info?.photo ? `url(${info.photo})` : "none";
+  photo.hidden = !info?.photo;
+  labels.active = it.name;
+  if (it.mesh) meta.push((it.mesh.userData.heightSource === "override" ? "已校准楼高" : "楼高为推算值"));
+  document.querySelector("#pd-meta")!.textContent = meta.join(" · ");
   panel?.setActive(it.name);
 }
 
@@ -235,11 +268,32 @@ function closeDetail(): void {
   document.querySelector("#place-detail")!.classList.remove("open");
 }
 
-function focusBuilding(mesh: THREE.Mesh | null): void {
+function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
   if (!mesh) return;
-  const d = mesh.userData as BuildingUserData;
-  flyTo(camera, controls, new THREE.Vector3(d.cx, d.height / 2, d.cy),
-    Math.max(150, Math.sqrt(d.area) * 3.4));
+  const box = boundsOf(mesh);
+  const usableWidth = window.innerWidth > 640 ? Math.max(240, window.innerWidth - 350) : window.innerWidth;
+  const usableHeight = window.innerWidth > 640 ? window.innerHeight : window.innerHeight * .53;
+  const fit = frameBox(box, camera.fov, usableWidth / usableHeight);
+  const center = fit.target;
+  let distance = fit.distance;
+  let dir = new THREE.Vector3(.70,.80,1.0);
+  if (view === "facade") { dir.set(.2,.35,1); distance *= .82; }
+  if (view === "court") { dir.set(.5,1.2,.7); distance *= .48; }
+  // Compose into the actual free area, not behind the side/bottom panel.
+  camera.setViewOffset(window.innerWidth, window.innerHeight,
+    window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .18 : 0,
+    window.innerWidth, window.innerHeight);
+  camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(camera.position.distanceTo(controls.target)));
+  flyTo(camera, controls, center, distance);
+}
+
+function homeView(): void {
+  camera.setViewOffset(window.innerWidth, window.innerHeight,
+    window.innerWidth > 640 ? -150 : 0, 0, window.innerWidth, window.innerHeight);
+  const usable = Math.max(240, window.innerWidth - (window.innerWidth > 640 ? 340 : 0));
+  const fit = frameBox(campusBounds, camera.fov, usable / window.innerHeight);
+  camera.position.copy(controls.target).add(new THREE.Vector3(.28,1.45,1).normalize().multiplyScalar(camera.position.distanceTo(controls.target)));
+  flyTo(camera, controls, fit.target, fit.distance * .88);
 }
 
 function selectPlace(it: SearchItem): void {
@@ -250,11 +304,13 @@ function selectPlace(it: SearchItem): void {
   }
   if (it.mesh) picker?.select(it.mesh);
   else picker?.clearSelection();
-  flyTo(camera, controls, it.target, it.distance);
+  if (it.mesh) focusBuilding(it.mesh);
+  else flyTo(camera, controls, it.target, it.distance);
   openDetail(it as PlaceEntry);
 }
 
 // ---- 场景加载 ----
+const campusBounds = new THREE.Box3();
 let buildingsRef: THREE.Group | null = null;
 async function loadScene(): Promise<void> {
   const res = await fetch("data/scene.json");
@@ -268,6 +324,10 @@ async function loadScene(): Promise<void> {
   buildWater(gWater, data.water);
   buildRoads(gRoads, data.roads);
 
+  if (data.boundary) {
+    for (const [x,y] of data.boundary.pts) campusBounds.expandByPoint(new THREE.Vector3(x, 0, -y));
+    campusBounds.max.y = 70;
+  }
   const inside = data.buildings.filter((b) => b.inside);
   const outside = data.buildings.filter((b) => !b.inside);
   buildContextBuildings(gContext, outside);
@@ -344,9 +404,9 @@ async function loadScene(): Promise<void> {
 
   // 标注：楼名（楼顶）+ 湖名
   for (const [name, mesh] of byName) {
-    const d = mesh.userData as BuildingUserData;
-    const pos = new THREE.Vector3(d.cx, d.height + 12, d.cy);
-    labels.add(name, pos, 1250, { onClick: () => { picker!.select(mesh); focusBuilding(mesh); } });
+    const box = boundsOf(mesh);
+    const pos = box.getCenter(new THREE.Vector3()); pos.y = box.max.y + 5;
+    labels.add(name, pos, 3400, { priority: mesh.userData.pickRoot ? 5 : 1, onClick: () => { picker!.select(mesh); focusBuilding(mesh); } });
   }
   for (const w of data.water) {
     if (!w.name || w.inside === false) continue;
@@ -377,6 +437,7 @@ async function loadScene(): Promise<void> {
 loadScene().then(() => {
   renderLayers();
   renderLighting();
+  if (!location.hash.includes("v=")) homeView();
 }).catch((e: unknown) => {
   statsEl.textContent = "加载出错：" + (e instanceof Error ? e.message : String(e));
   statsEl.classList.add("err");
@@ -467,10 +528,12 @@ const LIGHTING_DEFS: { key: PresetName; name: string; sub: string }[] = [
   { key: "night", name: "夜景", sub: "灯火渐明" },
 ];
 let currentPreset: PresetName = "day";
+let sunDirection: [number,number,number] = [600,900,350];
 function applyLighting(key: PresetName): void {
   currentPreset = key;
   picker?.clearSelection();
   dayNight?.apply(key);
+  sunDirection = sun.position.toArray() as [number,number,number];
   for (const c of document.querySelectorAll<HTMLButtonElement>("#lighting-list .lt-card")) {
     c.classList.toggle("on", c.dataset.key === key);
   }
@@ -606,7 +669,7 @@ document.querySelector("#tl-compass")!.addEventListener("click", () => {
 });
 document.querySelector("#tl-home")!.addEventListener("click", () => {
   setTour(false);
-  flyTo(camera, controls, HOME_VIEW.target, 1600);
+  homeView();
 });
 document.querySelector("#tl-fs")!.addEventListener("click", () => {
   if (!document.fullscreenEnabled) return;
@@ -705,10 +768,20 @@ renderer.setAnimationLoop((t) => {
     ripple.offset.y = (t * 0.000007) % 1;
   }
   controls.update();
+  updateDetailAssets();
+  const shadowSize = THREE.MathUtils.clamp(camera.position.distanceTo(controls.target) * .85, 160, 1700);
+  sun.position.copy(controls.target).add(new THREE.Vector3(...sunDirection));
+  sun.target.position.copy(controls.target);
+  Object.assign(sun.shadow.camera, { left: -shadowSize, right: shadowSize, top: shadowSize, bottom: -shadowSize });
+  sun.shadow.camera.updateProjectionMatrix();
   labels.update(camera);
   renderer.render(scene, camera);
   labels.render(scene, camera);
 });
 
 // 调试入口（控制台用）
-Object.assign(window, { __huxi: { renderer, scene, camera, controls } });
+Object.assign(window, { __huxi: { renderer, scene, camera, controls, detailAssets } });
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-building-view]")) {
+  button.addEventListener("click", () => focusBuilding(flyTargetBuilding, button.dataset.buildingView));
+}
