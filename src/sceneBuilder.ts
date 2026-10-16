@@ -20,15 +20,15 @@ import {
 export const COLORS = {
   ground: 0xb7c6a2, // 草地基调（对齐 gxu 观感）
   building: 0xf5f2ec,
-  water: 0x80a8b0,
+  water: 0x4f8b94,
   shore: 0xd8cdb0,
-  paving: 0xd6d3c8,
-  park: 0xaecb96,
-  grass: 0xbbcca3,
-  forest: 0x92bb81,
-  roadAsphalt: 0x626b65,
-  roadPath: 0xc8bfa8,
-  sidewalk: 0xd2d3d1,
+  paving: 0xc8c4b5,
+  park: 0xa4bc88,
+  grass: 0xb2c697,
+  forest: 0x88ad79,
+  roadAsphalt: 0x59655f,
+  roadPath: 0xcbbfa5,
+  sidewalk: 0xd4d2c4,
   roadMark: 0xe6e8e6,
 };
 
@@ -203,8 +203,8 @@ export const waterMaterial: THREE.MeshStandardMaterial = (() => {
   normalMap.repeat.set(1 / 26, 1 / 26); // ShapeGeometry uv 单位 = 米，约 26m 重复一波纹块
   const m = new THREE.MeshStandardMaterial({
     color: COLORS.water,
-    roughness: 0.3,
-    metalness: 0.28,
+    roughness: 0.48,
+    metalness: 0.12,
     normalMap,
     normalScale: new THREE.Vector2(0.35, 0.35),
   });

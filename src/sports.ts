@@ -1,17 +1,21 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type {Area} from './types';
+import {inCampus} from './campusClip.ts';
 
 type Pt=[number,number];
 type Buckets=Record<string,THREE.BufferGeometry[]>;
-const FLOOR=.07, PAINT=.10;
+const FLOOR=.15, PAINT=.19;
 const COLORS:Record<string,number>={
   mark:0xf5f3e7,courtGreen:0x347e69,courtKey:0xbd6447,apron:0x527d70,
   turf:0x438658,stripe:0x4b925f,tennis:0x407d91,badminton:0x537f83,
-  sand:0xd9c38f,pool:0x438fae,lane:0x285e7a,track:0xba563f,trackAlt:0xb7543e,
+  sand:0xd9c38f,pool:0x438fae,lane:0x285e7a,track:0xba563f,trackAlt:0xb7543e,walk:0xbdbca9,
   frame:0x246752,metal:0x879593,orange:0xe5762c,glass:0xa7c7c6,net:0xb5c8c2,
 };
 const SUPPORTED=new Set(['basketball','soccer','tennis','badminton','volleyball','beachvolleyball','table_tennis']);
+// User confirmed on 2026-10-16: running track surrounds the football pitch next to the gym.
+// Centre/orientation follow OSM pitch 1057532743; eight 1.22m lanes and oval dimensions are estimates.
+const VERIFIED_TRACK={pitchId:1057532743,width:98,length:180};
 
 export function detailedSport(a:Area):boolean {
   return a.kind==='pool'||(a.kind==='pitch'&&SUPPORTED.has(a.sport??''))||
@@ -70,6 +74,7 @@ function beam(b:Buckets,key:string,a:[number,number,number],c:[number,number,num
   g.translate(...p.add(q).multiplyScalar(.5).toArray());b[key].push(g);
 }
 function net(b:Buckets,width:number,top:number,bottom:number):void {
+  top+=FLOOR;bottom+=FLOOR;
   for(const x of [-width/2,width/2])beam(b,'metal',[x,0,FLOOR],[x,0,top+.12],.045);
   beam(b,'mark',[-width/2,0,top],[width/2,0,top],.025);
   for(let i=0;i<=Math.ceil(width/.45);i++) {
@@ -93,19 +98,19 @@ function basketball(b:Buckets):void {
     arc(b,0,rim,1.25,start,start+Math.PI);
     const post=s*14.55,board=s*12.815;
     box(b,'metal',0,FLOOR+.06,post,.74,.12,.52);
-    beam(b,'frame',[0,post,FLOOR],[0,post,2.75],.10);
-    beam(b,'frame',[0,post,2.65],[0,s*13.35,3.5],.055);
-    beam(b,'frame',[0,s*13.35,3.5],[0,board,3.5],.055);
-    box(b,'glass',0,3.50,board,1.8,1.05,.035);
-    for(const x of [-.875,.875])box(b,'mark',x,3.50,board-s*.025,.05,1.05,.035);
-    for(const h of [3.0,4.0])box(b,'mark',0,h,board-s*.025,1.8,.05,.035);
-    for(const x of [-.28,.28])box(b,'mark',x,3.30,board-s*.045,.035,.45,.025);
-    for(const h of [3.09,3.52])box(b,'mark',0,h,board-s*.045,.60,.035,.025);
-    const ring=new THREE.TorusGeometry(.225,.014,6,20);ring.rotateX(Math.PI/2);ring.translate(0,3.12,-rim);b.orange.push(ring);
+    beam(b,'frame',[0,post,FLOOR],[0,post,FLOOR+2.68],.10);
+    beam(b,'frame',[0,post,FLOOR+2.58],[0,s*13.35,FLOOR+3.43],.055);
+    beam(b,'frame',[0,s*13.35,FLOOR+3.43],[0,board,FLOOR+3.43],.055);
+    box(b,'glass',0,FLOOR+3.425,board,1.8,1.05,.035);
+    for(const x of [-.875,.875])box(b,'mark',x,FLOOR+3.425,board-s*.025,.05,1.05,.035);
+    for(const h of [2.925,3.925])box(b,'mark',0,FLOOR+h,board-s*.025,1.8,.05,.035);
+    for(const x of [-.28,.28])box(b,'mark',x,FLOOR+3.23,board-s*.045,.035,.45,.025);
+    for(const h of [3.02,3.45])box(b,'mark',0,FLOOR+h,board-s*.045,.60,.035,.025);
+    const ring=new THREE.TorusGeometry(.225,.014,6,20);ring.rotateX(Math.PI/2);ring.translate(0,FLOOR+3.041,-rim);b.orange.push(ring);
     for(let level=0;level<2;level++)for(let i=0;i<12;i++)for(const sign of [-1,1]) {
       const a=i*Math.PI/6,c=a+sign*Math.PI/12,r0=.225-level*.045,r1=r0-.045;
-      beam(b,'net',[r0*Math.cos(a),rim+r0*Math.sin(a),3.12-level*.2],
-        [r1*Math.cos(c),rim+r1*Math.sin(c),2.92-level*.2],.005,3);
+      beam(b,'net',[r0*Math.cos(a),rim+r0*Math.sin(a),FLOOR+3.041-level*.2],
+        [r1*Math.cos(c),rim+r1*Math.sin(c),FLOOR+2.841-level*.2],.005,3);
     }
   }
 }
@@ -144,21 +149,36 @@ function oval(r:number,half:number):Pt[] {
     const a=(s>0?0:Math.PI)+i*Math.PI/48;return [r*Math.cos(a),s*half+r*Math.sin(a)] as Pt;
   }));
 }
-function track(b:Buckets,width:number,length:number):void {
+/** Include the confirmed running lanes when placing trees; OSM input stays untouched. */
+export function sportsSiteAreas(areas:Area[]):Area[] {
+  const pitch=areas.find(a=>a.id===VERIFIED_TRACK.pitchId),f=pitch&&sportsFrame(pitch.outers[0]);
+  if(!pitch||!f)return [];
+  const c=Math.cos(f.angle),s=Math.sin(f.angle),r=VERIFIED_TRACK.width/2,half=VERIFIED_TRACK.length/2-r;
+  const ring=oval(r+1.3,half).map(([x,v])=>[f.cx+x*c-v*s,f.cy+x*s+v*c] as Pt);
+  return [{id:'confirmed-main-track',name:'田径场',kind:'track',sport:'running',outers:[ring],inners:[]}];
+}
+function track(b:Buckets,width:number,length:number,pitchWidth?:number,pitchLength?:number):void {
   const outer=width/2-1,inner=outer-8*1.22,half=Math.max(0,length/2-outer);
   if(inner<10)return;
+  polygon(b,'apron',oval(outer+1.3,half),FLOOR-.025);
   for(let lane=0;lane<8;lane++) {
     const p=oval(inner+lane*1.22,half),q=oval(inner+(lane+1)*1.22,half);
     for(let i=0;i<p.length;i++)polygon(b,lane%2?'trackAlt':'track',[p[i],q[i],q[(i+1)%p.length],p[(i+1)%p.length]]);
   }
-  polygon(b,'turf',oval(inner,half));
+  polygon(b,'turf',oval(inner,half),FLOOR-.01);
   for(let lane=0;lane<=8;lane++){const p=oval(inner+lane*1.22,half);p.forEach((a,i)=>line(b,a,p[(i+1)%p.length],.075));}
-  football(b,Math.min(64,inner*1.8),Math.min(100,half*2+inner*.55));
+  football(b,pitchWidth??Math.min(64,inner*1.8),pitchLength??Math.min(100,half*2+inner*.55));
 }
 
 /** A single local frame per footprint, followed by material batching. */
 export function buildSportsMarks(parent:THREE.Object3D,areas:Area[]):void {
   const all=bucket(),counts:Record<string,number>={};
+  const confirmed=areas.filter(detailedSport).map(a=>sportsFrame(a.outers[0])).filter(f=>!!f);
+  for(const a of areas.filter(a=>a.kind==='pitch'&&!a.sport)) {
+    // Shared circulation within a mapped bank; no inferred court counts or running tracks.
+    if(confirmed.filter(f=>inCampus([f.cx,f.cy],a.outers[0])).length>=2)
+      for(const outer of a.outers)polygon(all,'walk',outer,.055);
+  }
   for(const a of areas) {
     if(!detailedSport(a)||!a.outers[0])continue;
     const f=sportsFrame(a.outers[0]);if(!f)continue;
@@ -173,7 +193,11 @@ export function buildSportsMarks(parent:THREE.Object3D,areas:Area[]):void {
     const pads=new Set(b[pad]);let scale=1;
     if(sport==='basketball'&&f.width<=18&&f.length<=34) {
       scale=Math.min(1,f.width/15,f.length/28);basketball(b);
-    } else if(sport==='soccer')football(b,Math.max(10,f.width-2),Math.max(16,f.length-3));
+    } else if(sport==='soccer') {
+      if(a.id===VERIFIED_TRACK.pitchId) {
+        track(b,VERIFIED_TRACK.width,VERIFIED_TRACK.length,f.width-2,f.length-3);counts.track=(counts.track??0)+1;
+      } else football(b,Math.max(10,f.width-2),Math.max(16,f.length-3));
+    }
     else if(['tennis','badminton','volleyball','beachvolleyball'].includes(sport)) {
       const w=sport==='tennis'?10.97:sport==='badminton'?6.1:9,l=sport==='tennis'?23.77:sport==='badminton'?13.4:18;
       scale=Math.min(1,(f.width-.2)/w,(f.length-.2)/l);racket(b,sport);

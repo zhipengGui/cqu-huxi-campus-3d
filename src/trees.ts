@@ -125,9 +125,20 @@ export function buildTrees(
   const roadBoxes = roads.map((r) => ({ bbox: bbox(r.pts), half: r.width / 2 + 2.5, pts: r.pts }));
   const waterBoxes = water.map((w) => ({ bbox: bbox(w.outers[0]), pts: w.outers[0] }));
   const buildingBoxes = buildings.map((b) => ({ bbox: bbox(b.polygon), pts: b.polygon }));
+  const sportsBoxes = green.filter(g=>g.kind==='pitch'||g.kind==='track'||g.kind==='pool')
+    .flatMap(g=>g.outers.map(pts=>({bbox:bbox(pts),pts})));
+  const planted=new Map<string,Pt[]>(),cell=7;
+  const remember=(x:number,y:number):void=>{const k=`${Math.floor(x/cell)},${Math.floor(y/cell)}`;if(!planted.has(k))planted.set(k,[]);planted.get(k)!.push([x,y]);};
 
   function blocked(x: number, y: number): boolean {
     if (boundary && !pointInPoly(x, y, boundary)) return true; // 校界外不种树
+    const gx=Math.floor(x/cell),gy=Math.floor(y/cell);
+    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)
+      if(planted.get(`${gx+dx},${gy+dy}`)?.some(p=>Math.hypot(x-p[0],y-p[1])<6.2))return true;
+    for(const sb of sportsBoxes) {
+      if(x<sb.bbox[0]-3||x>sb.bbox[2]+3||y<sb.bbox[1]-3||y>sb.bbox[3]+3)continue;
+      if(pointInPoly(x,y,sb.pts)||sb.pts.some((p,i)=>distPointSeg(x,y,...p,...sb.pts[(i+1)%sb.pts.length])<3.1))return true;
+    }
     for (const wb of waterBoxes) {
       if (x >= wb.bbox[0] && x <= wb.bbox[2] && y >= wb.bbox[1] && y <= wb.bbox[3]
         && pointInPoly(x, y, wb.pts)) return true;
@@ -141,8 +152,9 @@ export function buildTrees(
       }
     }
     for (const bb of buildingBoxes) {
-      if (x < bb.bbox[0] - 2 || x > bb.bbox[2] + 2 || y < bb.bbox[1] - 2 || y > bb.bbox[3] + 2) continue;
+      if (x < bb.bbox[0] - 4.2 || x > bb.bbox[2] + 4.2 || y < bb.bbox[1] - 4.2 || y > bb.bbox[3] + 4.2) continue;
       if (pointInPoly(x, y, bb.pts)) return true;
+      if(bb.pts.some((p,i)=>distPointSeg(x,y,...p,...bb.pts[(i+1)%bb.pts.length])<4.2))return true;
     }
     return false;
   }
@@ -156,7 +168,6 @@ export function buildTrees(
     if (boundary && !pointInPoly(outer[0][0], outer[0][1], boundary)) continue;
     let density = DENSITY[g.kind ?? "park"];
     if (!density) continue;
-    if (g.kind === "grass" && shoelace(outer) > 50000) density = DENSITY.forest; // 大草地=林地密植
     const n = Math.min(MAX_PER_AREA, Math.floor(shoelace(outer) * density));
     const [x0, y0, x1, y1] = bbox(outer);
     let accepted = 0;
@@ -170,6 +181,7 @@ export function buildTrees(
       const r = rng();
       const ti = r < 0.66 ? 0 : r < 0.91 ? 1 : 2;
       templates[ti].push([x, y]);
+      remember(x,y);
       accepted++;
       total++;
     }
@@ -181,7 +193,7 @@ export function buildTrees(
     if (k === "footway" || k === "path" || k === "steps" || k === "track" || k === "cycleway") continue;
     const pts = r.pts;
     if (pts.length < 2) continue;
-    const off = r.width / 2 + 3.5;
+    const off = r.width / 2 + 5.3;
     let acc = AVENUE_STEP * 0.5;
     let n = 0;
     for (let i = 0; i < pts.length - 1; i++) {
@@ -203,6 +215,7 @@ export function buildTrees(
         const r2 = rng();
         const ti = r2 < 0.7 ? 0 : r2 < 0.94 ? 1 : 2;
         templates[ti].push([tx, ty]);
+        remember(tx,ty);
         total++;
       }
       acc -= segLen;
@@ -234,7 +247,7 @@ export function buildTrees(
     const trunks = new THREE.InstancedMesh(trunksGeo[ti], trunkMat, pts.length);
     const palette = CROWN_PALETTES[ti];
     pts.forEach(([x, y], i) => {
-      const sc = 0.9 + rng() * 0.5; // 树高错落
+      const sc = 0.88 + rng() * 0.34; // 树高错落，控制树冠遮挡
       e.set(0, rng() * Math.PI * 2, 0);
       q.setFromEuler(e);
       v.set(x, 0, -y);

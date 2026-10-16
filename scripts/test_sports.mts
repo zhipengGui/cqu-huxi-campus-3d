@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
-import {buildSportsMarks} from '../src/sports.ts';
+import {buildSportsMarks,sportsFrame} from '../src/sports.ts';
 import {campusAreas} from '../src/campusClip.ts';
 
 function court(angle:number) {
@@ -50,3 +50,15 @@ let calls=0,triangles=0;group.traverse(o=>{if(o instanceof THREE.Mesh){calls++;t
 assert.ok(calls<=24&&triangles<65000,'sports must remain batched and bounded');
 assert.equal(JSON.stringify(data),before,'rendering must not mutate mapped data or navigation');
 console.log('PASS all mapped sports surfaces and immutable inputs',JSON.stringify({calls,triangles}));
+const trackSurfaces=group.children.filter(o=>o instanceof THREE.Mesh&&[0xba563f,0xb7543e].includes(o.material.color.getHex()));
+assert.equal(trackSurfaces.length,2,'user-confirmed track around the football pitch beside the gym must have alternating running lanes');
+assert.equal(group.userData.sports.counts.track,1,'one confirmed campus track, without inferring others by size');
+const f=sportsFrame(data.green.find(a=>a.id===1057532743).outers[0]);
+for(const mesh of trackSurfaces) {
+  const p=mesh.geometry.attributes.position,c=Math.cos(f.angle),s=Math.sin(f.angle);
+  for(let i=0;i<p.count;i++) {
+    const x=p.getX(i)-f.cx,y=-p.getZ(i)-f.cy,u=x*c+y*s,v=-x*s+y*c;
+    assert.ok(Math.abs(u)>(f.width-2)/2||Math.abs(v)>(f.length-3)/2,'running lanes must remain outside the football rectangle');
+  }
+}
+console.log('PASS confirmed track location and football/track clearance');

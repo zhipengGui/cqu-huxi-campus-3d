@@ -35,6 +35,10 @@ try {
   if(!baseline){assert.ok(checks.sports.metrics,'sports metrics');assert.equal(checks.sports.metrics.counts.soccer,5);assert.ok(checks.sports.metrics.drawCalls<=24&&checks.sports.metrics.triangles<65000);}
   await pose(285,0,568,40,75,80);await capture('basketball');
   await pose(461,0,524,100,105,135);await capture('football');
+  for(const [name,label]of [['library','图书馆'],['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼']]) {
+    await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);
+    await capture(name);
+  }
   assert.equal(errors.length,0,'browser exceptions');
   await writeFile(root+'/work/qa/'+prefix+'-showcase-check.json',JSON.stringify({ready,errors,checks},null,2));
   console.log(JSON.stringify({ready,errors,checks}));

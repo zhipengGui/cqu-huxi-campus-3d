@@ -27,7 +27,7 @@ import {
 import { initSearch, type SearchItem } from "./search";
 import { DayNight, applyBuildingEmissive, type PresetName } from "./dayNight";
 import { buildActivity, buildGate, buildGym, buildLikelou, buildLibrary, buildZonghe, gateLabel } from "./landmarks";
-import { buildSportsMarks } from "./sports";
+import { buildSportsMarks, sportsSiteAreas } from "./sports";
 import { Navigator } from "./navigation";
 import { collectPlaces, initPlacesPanel, type PlaceEntry, type PlacesPanel } from "./placesPanel";
 import { PLACE_INFO } from "./placesInfo";
@@ -351,7 +351,7 @@ async function loadScene(): Promise<void> {
   if (data.boundary) {
     const shape = new THREE.Shape(data.boundary.pts.map(([x,y]) => new THREE.Vector2(x,y)));
     const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI/2);
-    const campusGround = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color: 0xb1bd9b}));
+    const campusGround = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color: 0xa7b690}));
     campusGround.position.y = -.15; campusGround.receiveShadow = true; scene.add(campusGround);
   }
   const campusGreen = campusAreas(data.green, data.boundary?.pts);
@@ -390,7 +390,7 @@ async function loadScene(): Promise<void> {
     return fallbackLandmark(b);
   }));
   for (const g of landmarkGroups) buildings.add(g);
-  const treeCount = buildTrees(gTrees, data.green, data.roads, data.water, data.buildings, data.boundary?.pts);
+  const treeCount = buildTrees(gTrees, [...campusGreen,...sportsSiteAreas(campusGreen)], data.roads, campusWater, inside, data.boundary?.pts);
 
   dayNight = new DayNight(scene, hemi, sun, buildings);
   dayNight.apply("day");
