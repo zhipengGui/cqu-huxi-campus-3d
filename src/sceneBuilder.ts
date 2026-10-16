@@ -92,12 +92,12 @@ function shapeFromRings(outer: [number, number][], holes: [number, number][][]):
 }
 
 export function buildGround(scene: THREE.Scene): void {
-  const geo = new THREE.PlaneGeometry(4000, 4000);
+  const geo = new THREE.PlaneGeometry(20000, 20000);
   geo.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(
     geo,
     new THREE.MeshLambertMaterial({
-      color: COLORS.ground,
+      color: 0xd6d8c8,
       polygonOffset: true,
       polygonOffsetFactor: 2,
       polygonOffsetUnits: 2,
@@ -276,7 +276,7 @@ export function bboxCenter(pts: [number, number][]): [number, number] {
 /** 校外背景楼：合并成单个素色网格（无标注、无拾取，仅作城市背景） */
 export function buildContextBuildings(parent: THREE.Object3D, buildings: Building[]): void {
   if (!buildings.length) return;
-  const mat = new THREE.MeshLambertMaterial({ color: 0xdedcd6 });
+  const mat = new THREE.MeshLambertMaterial({ color: 0xd6d8ce, transparent: true, opacity: .48 });
   const geos: THREE.BufferGeometry[] = [];
   for (const b of buildings) {
     const shape = shapeFromRings(b.polygon, b.holes);

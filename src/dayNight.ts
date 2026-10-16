@@ -26,7 +26,7 @@ const PRESETS: Record<PresetName, Preset> = {
     shadows: true, emissive: 0x000000,
   },
   day: {
-    bg: 0xdfeaf2, fogNear: 2200, fogFar: 5200,
+    bg: 0xd6d8c8, fogNear: 2200, fogFar: 5200,
     hemiSky: 0xcfe5ff, hemiGround: 0xb8b09a, hemiInt: 1.1,
     sunColor: 0xfff2dd, sunInt: 1.8, sunPos: [600, 900, 350],
     shadows: true, emissive: 0x000000,

@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { boundsOf, frameBox } from "./landmarkViews";
+import { clipRoads, inCampus } from "./campusClip";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { SceneData, Building, Gate } from "./types";
 import {
@@ -56,7 +57,7 @@ scene.environmentIntensity = .30;
 environment.dispose();
 pmrem.dispose();
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 2, 9000);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 2, 18000);
 const HOME_VIEW = { pos: new THREE.Vector3(650, 620, 1050), target: new THREE.Vector3(0, 10, 0) };
 camera.position.copy(HOME_VIEW.pos);
 
@@ -66,7 +67,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.minDistance = 40;
-controls.maxDistance = 3200;
+controls.maxDistance = 8500;
 
 const hemi = new THREE.HemisphereLight(0xcfe5ff, 0xb8b09a, 1.1);
 scene.add(hemi);
@@ -90,6 +91,9 @@ scene.add(labels.root);
 
 function resize(): void {
   camera.aspect = window.innerWidth / window.innerHeight;
+  camera.setViewOffset(window.innerWidth, window.innerHeight,
+    window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .20 : 0,
+    window.innerWidth, window.innerHeight);
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   labels.setSize(window.innerWidth, window.innerHeight);
@@ -289,11 +293,12 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
 
 function homeView(): void {
   camera.setViewOffset(window.innerWidth, window.innerHeight,
-    window.innerWidth > 640 ? -150 : 0, 0, window.innerWidth, window.innerHeight);
+    window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .20 : 0,
+    window.innerWidth, window.innerHeight);
   const usable = Math.max(240, window.innerWidth - (window.innerWidth > 640 ? 340 : 0));
   const fit = frameBox(campusBounds, camera.fov, usable / window.innerHeight);
   camera.position.copy(controls.target).add(new THREE.Vector3(.28,1.45,1).normalize().multiplyScalar(camera.position.distanceTo(controls.target)));
-  flyTo(camera, controls, fit.target, fit.distance * .88);
+  flyTo(camera, controls, fit.target, fit.distance * (window.innerWidth > 640 ? .70 : .90));
 }
 
 function selectPlace(it: SearchItem): void {
@@ -318,11 +323,22 @@ async function loadScene(): Promise<void> {
   const data: SceneData = await res.json();
 
   buildGround(scene);
-  buildGreen(gGreen, gSports, data.green);
-  buildSportsMarks(gSports, data.green);
+  if (data.boundary) {
+    const shape = new THREE.Shape(data.boundary.pts.map(([x,y]) => new THREE.Vector2(x,y)));
+    const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI/2);
+    const campusGround = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color: 0xb4c59e}));
+    campusGround.position.y = -.15; campusGround.receiveShadow = true; scene.add(campusGround);
+  }
+  const campusGreen = data.green.filter(a => {
+    const outer = a.outers[0];
+    if (!outer || a.inside === false) return false;
+    return !data.boundary || inCampus(bboxCenter(outer), data.boundary.pts);
+  });
+  buildGreen(gGreen, gSports, campusGreen);
+  buildSportsMarks(gSports, campusGreen);
   buildPaving(gRoads, data.paving);
-  buildWater(gWater, data.water);
-  buildRoads(gRoads, data.roads);
+  buildWater(gWater, data.water.filter(a => a.inside !== false));
+  buildRoads(gRoads, data.boundary ? clipRoads(data.roads, data.boundary.pts) : data.roads);
 
   if (data.boundary) {
     for (const [x,y] of data.boundary.pts) campusBounds.expandByPoint(new THREE.Vector3(x, 0, -y));
@@ -330,7 +346,10 @@ async function loadScene(): Promise<void> {
   }
   const inside = data.buildings.filter((b) => b.inside);
   const outside = data.buildings.filter((b) => !b.inside);
-  buildContextBuildings(gContext, outside);
+  buildContextBuildings(gContext, outside.filter(b => {
+    const [x,y] = bboxCenterOfBuilding(b);
+    return !data.boundary || inCampus([x,y],data.boundary.pts) || data.boundary.pts.some(p => Math.hypot(p[0]-x,p[1]-y) < 110);
+  }));
   if (data.boundary) {
     boundaryLine = buildBoundaryLine(data.boundary);
     scene.add(boundaryLine);
@@ -734,6 +753,11 @@ document.querySelector("#tl-export")!.addEventListener("click", () => {
   camera.position.set(px, py, pz);
   controls.target.set(tx, ty, tz);
   controls.update();
+  if (scene.fog instanceof THREE.Fog) {
+    const distance = camera.position.distanceTo(controls.target);
+    scene.fog.near = Math.max(2100, distance * 1.3);
+    scene.fog.far = Math.max(5200, distance * 2.2);
+  }
 })();
 
 // ---- 键盘快捷键 ----
@@ -769,6 +793,11 @@ renderer.setAnimationLoop((t) => {
   }
   controls.update();
   updateDetailAssets();
+  if (scene.fog instanceof THREE.Fog) {
+    const distance = camera.position.distanceTo(controls.target);
+    scene.fog.near = Math.max(2100, distance * 1.3);
+    scene.fog.far = Math.max(5200, distance * 2.2);
+  }
   const shadowSize = THREE.MathUtils.clamp(camera.position.distanceTo(controls.target) * .85, 160, 1700);
   sun.position.copy(controls.target).add(new THREE.Vector3(...sunDirection));
   sun.target.position.copy(controls.target);

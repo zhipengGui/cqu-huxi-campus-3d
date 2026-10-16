@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>重庆大学虎溪校区 3D 地图</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <style>
     :root {
       --panel-bg: rgba(255, 255, 255, 0.88);
@@ -172,7 +173,7 @@
 
     [hidden] { display: none !important; }
     .building-views { display:flex; gap:6px; margin:12px 0; }
-    .building-views button { flex:1; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:inherit; cursor:pointer; }
+    .building-views button { flex:1; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--panel-bg); color:inherit; cursor:pointer; }
     #place-detail { display: none; }
     #place-detail.open { display: block; }
     #hud.detail-mode .hud-tabs,
@@ -260,6 +261,8 @@
     @media (max-width: 640px) {
       #hud { width: auto; right: 12px; max-height: 42vh; top:auto; bottom:12px; }
       #hud.detail-mode #pd-photo { height: 90px; }
+      #tools { top:12px; right:12px; transform:none; flex-direction:row; gap:4px; }
+      #tools button { width:32px; height:34px; font-size:17px; }
       #hud-head { padding: 9px 12px 7px; }
       #hud-body { padding: 0 12px 9px; }
       #hud .title { font-size: 14px; }
