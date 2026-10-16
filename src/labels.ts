@@ -54,7 +54,7 @@ export class LabelLayer {
     this.entries.push({ obj, pos, limit, text, priority: opts?.priority ?? (opts?.cls === "gate" ? 4 : 2) });
   }
 
-  update(camera: THREE.Camera): void {
+  update(camera: THREE.Camera, target: THREE.Vector3): void {
     const now = performance.now();
     if (now - this.lastUpdate < 90) return;
     this.lastUpdate = now;
@@ -65,9 +65,11 @@ export class LabelLayer {
       ((b.text === this.active ? 100 : b.priority) - (a.text === this.active ? 100 : a.priority)) ||
       camera.position.distanceTo(a.pos)-camera.position.distanceTo(b.pos));
     let count = 0;
+    const overview=camera.position.distanceTo(target)>1700;
     for (const e of entries) {
       e.obj.visible = false;
       if (!this.enabled || camera.position.distanceTo(e.pos) >= e.limit) continue;
+      if (overview && e.priority<3 && e.text!==this.active) continue;
       const p = e.pos.clone().project(camera);
       if (p.z < -1 || p.z > 1) continue;
       const x = (p.x+1)*window.innerWidth/2, y = (1-p.y)*window.innerHeight/2;
@@ -75,7 +77,7 @@ export class LabelLayer {
       const rect = {left:x-w/2-5, right:x+w/2+5, top:y-16, bottom:y+16};
       if (rect.left < 6 || rect.right > window.innerWidth-65 || rect.top < 6 || rect.bottom > window.innerHeight-20) continue;
       if (occupied.some(r => rect.left < r.right && rect.right > r.left && rect.top < r.bottom && rect.bottom > r.top)) continue;
-      if (count >= (window.innerWidth < 640 ? 7 : 14)) continue;
+      if (count >= (window.innerWidth < 640 ? (overview?5:7) : (overview?10:14))) continue;
       occupied.push(rect); count++; e.obj.visible = true;
     }
   }

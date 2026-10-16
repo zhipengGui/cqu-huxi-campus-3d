@@ -19,13 +19,13 @@ import {
 export const COLORS = {
   ground: 0xb7c6a2, // 草地基调（对齐 gxu 观感）
   building: 0xf5f2ec,
-  water: 0x7fbcd9,
+  water: 0x80a8b0,
   shore: 0xd8cdb0,
   paving: 0xd6d3c8,
   park: 0xaecb96,
-  grass: 0xc2dba6,
+  grass: 0xbbcca3,
   forest: 0x92bb81,
-  roadAsphalt: 0x50555b,
+  roadAsphalt: 0x626b65,
   roadPath: 0xc8bfa8,
   sidewalk: 0xd2d3d1,
   roadMark: 0xe6e8e6,

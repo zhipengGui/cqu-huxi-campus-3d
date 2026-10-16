@@ -347,7 +347,7 @@ def export_asset(asset, config, building, detail, preview=True):
     root['sourceUrl']=config['reference']
     if holes:
         point=interior_point(holes[0])
-        if point:root['courtX']=point[0];root['courtNorth']=point[1]
+        if point:root['courtX']=point[0];root['courtNorth']=point[1];root['courtRadius']=point[2]
     for name,(verts,faces) in model.parts.items():
         if not faces:continue
         mesh=bpy.data.meshes.new(name);mesh.from_pydata(verts,[],faces);mesh.update()

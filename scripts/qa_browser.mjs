@@ -34,8 +34,12 @@ try {
   async function capture(name){await delay(1700);const r=await send('Page.captureScreenshot',{format:'png'});await writeFile(root+'/work/qa/'+name+'.png',Buffer.from(r.data,'base64'));}
   await capture('v8-campus');
   const checks={};
-  checks.context=await evaluate(`(()=>{const root=window.__huxi.scene.getObjectByName('context');let triangles=0,calls=0,shadows=false;root.traverse(o=>{if(o.isMesh){calls++;triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3;shadows||=o.castShadow||o.receiveShadow;}});return {...root.userData.metrics,calls,triangles,shadows};})()`);
+  async function homeProjection(){return await evaluate(`(async()=>{const data=await(await fetch('data/scene.json')).json(),{Vector3}=await import('/node_modules/.vite/deps/three.js'),h=window.__huxi,w=innerWidth,height=innerHeight,hud=document.querySelector('#hud').getBoundingClientRect();const rect=w>640?{left:hud.right+20,right:w-72,top:24,bottom:height-24}:{left:12,right:w-12,top:60,bottom:hud.top-16};const points=data.boundary.pts.map(([x,y])=>new Vector3(x,0,-y));for(const b of data.buildings.filter(b=>b.inside))for(const [x,y]of b.polygon)points.push(new Vector3(x,b.height,-y));const projected=points.map(p=>{p.project(h.camera);return [(p.x+1)*w/2,(1-p.y)*height/2];});return {inside:projected.every(([x,y])=>x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom),widthRatio:(Math.max(...projected.map(p=>p[0]))-Math.min(...projected.map(p=>p[0])))/(rect.right-rect.left)};})()`);}
+  checks.home=await homeProjection();console.log('HOME',JSON.stringify(checks.home));
+  assert.ok(checks.home.inside&&checks.home.widthRatio>.8,'home view should frame and fill the actual free viewport');
+  checks.context=await evaluate(`(()=>{const root=window.__huxi.scene.getObjectByName('context');let triangles=0,calls=0,shadows=false;root.traverse(o=>{if(o.isMesh){calls++;triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3;shadows||=o.castShadow||o.receiveShadow;}});return {...root.userData.metrics,calls,triangles,shadows,surfaceIds:root.userData.surfaceIds};})()`);
   assert.ok(checks.context.buildings>0&&checks.context.calls<=20&&checks.context.triangles<=50000&&!checks.context.shadows);
+  assert.ok(checks.context.surfaceIds.includes(773911408)&&checks.context.surfaceIds.includes(17784946),'nearby park and water portions must survive clipping');
   console.log('CONTEXT',JSON.stringify(checks.context));
   assert.ok(await evaluate(`(async()=>{
     const {BuildingPicker}=await import('/src/interact.ts');const h=window.__huxi,e=h.detailAssets.find(e=>e.asset==='zonghe');
@@ -58,8 +62,8 @@ try {
   checks.views={};
   for(const [asset,label] of [['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼']]) {
     await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();document.querySelector('[data-building-view=court]').click();`);
-    const court=await evaluate(`(()=>{const h=window.__huxi,e=h.detailAssets.find(e=>e.asset===${JSON.stringify(asset)}),expected=e.root.localToWorld(e.root.userData.court.clone()),offset=h.camera.position.clone().sub(h.controls.target);return {targetError:h.controls.target.distanceTo(expected),elevation:offset.y/offset.length()};})()`);
-    assert.ok(court.targetError<.01&&court.elevation>.85,'close view must target an actual courtyard: '+asset);
+    const court=await evaluate(`(()=>{const h=window.__huxi,e=h.detailAssets.find(e=>e.asset===${JSON.stringify(asset)}),expected=e.root.localToWorld(e.root.userData.court.clone()),offset=h.camera.position.clone().sub(h.controls.target);if(e.root.userData.courtRadius)expected.y=e.building.height*.35;return {targetError:h.controls.target.distanceTo(expected),elevation:offset.y/offset.length()};})()`);
+    assert.ok(court.targetError<.01&&court.elevation>.65&&court.elevation<.85,'close view must show the actual courtyard walls and floor: '+asset);
     await capture('v8-'+asset+'-courtyard');
     await evaluate(`document.querySelector('[data-building-view=facade]').click()`);
     const facade=await evaluate(`(()=>{const h=window.__huxi,d=h.camera.position.clone().sub(h.controls.target);return d.y/d.length();})()`);
@@ -90,21 +94,35 @@ try {
   assert.equal(await evaluate('document.querySelector("#tour-name").textContent'),'图书馆');
   await evaluate('document.querySelector("#tour-exit").click();document.querySelector("#tl-home").click();');
   await delay(300);
-  const road=await evaluate(`(async()=>{const data=await(await fetch('data/scene.json')).json(),{Vector3}=await import('/node_modules/.vite/deps/three.js'),{inCampus}=await import('/src/campusClip.ts');for(const [a,b,len] of data.graph.edges){if(len<30)continue;const ends=[data.graph.nodes[a],data.graph.nodes[b]];if(!ends.every(p=>inCampus(p,data.boundary.pts)))continue;const p=ends.map(([x,y])=>{const v=new Vector3(x,0,-y).project(window.__huxi.camera);return [(v.x+1)*720,(1-v.y)*480];});if(p.every(([x,y])=>x>330&&x<1350&&y>100&&y<800)&&Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1])>12)return p;}throw Error('no visible road test segment');})()`);
+  const navPoints=await evaluate(`(async()=>{
+    const data=await(await fetch('data/scene.json')).json(),{Vector2,Vector3,Raycaster}=await import('/node_modules/.vite/deps/three.js'),h=window.__huxi;
+    const group=h.detailAssets[0].root.parent,ray=new Raycaster();
+    const visible=o=>{for(;o;o=o.parent)if(!o.visible)return false;return true;};
+    const project=p=>{const v=p.clone().project(h.camera);return [(v.x+1)*720,(1-v.y)*480];};
+    const free=([x,y])=>x>330&&x<1350&&y>100&&y<800&&document.elementFromPoint(x,y)===h.renderer.domElement;
+    const hit=([x,y])=>{ray.setFromCamera(new Vector2(x/720-1,1-y/480),h.camera);return ray.intersectObjects(group.children,true).some(e=>visible(e.object));};
+    const entry=h.detailAssets.find(e=>e.asset==='zonghe');let building;
+    entry.root.traverse(m=>{if(building||!m.isMesh||m.name!=='roof'||!visible(m))return;const a=m.geometry.attributes.position,ix=m.geometry.index;
+      for(let i=0;i<(ix?ix.count:a.count);i+=3){const v=new Vector3();for(let k=0;k<3;k++){const n=ix?ix.getX(i+k):i+k;v.add(new Vector3(a.getX(n),a.getY(n),a.getZ(n)).multiplyScalar(1/3));}m.localToWorld(v);const p=project(v);if(free(p)&&hit(p)){building=p;break;}}});
+    for(const [a,b]of data.graph.edges){const p=data.graph.nodes[a],q=data.graph.nodes[b],pixel=project(new Vector3((p[0]+q[0])/2,0,-(p[1]+q[1])/2));if(free(pixel)&&!hit(pixel)&&building)return {building,ground:pixel};}
+    throw Error('no unobstructed building/ground navigation pair');
+  })()`);
   await evaluate(`document.querySelector('#tb-nav').click()`);
   async function clickMap([x,y]){await send('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});await send('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});}
-  // At this fixed home view the first endpoint projects behind a building. One tap
-  // must not set both a ground start and a building destination.
-  await clickMap(road[0]);
+  // Choose actual unobstructed pixels so the regression survives camera changes.
+  await clickMap(navPoints.building);
   assert.doesNotMatch(await evaluate(`document.querySelector('#nav-status').textContent`),/路线/,'one building click must not create a route');
-  await clickMap(road[1]);await clickMap(road[0]);
+  await clickMap(navPoints.ground);await clickMap(navPoints.building);
   checks.navigation=await evaluate(`document.querySelector('#nav-status').textContent`);
   assert.match(checks.navigation,/路线.*m/);await evaluate(`document.querySelector('#nav-clear').click();document.querySelector('#nav-exit').click();`);
   checks.performance=await evaluate('new Promise(resolve=>{const t=performance.now(),f=window.__huxi.renderer.info.render.frame;setTimeout(()=>resolve({fps:(window.__huxi.renderer.info.render.frame-f)*1000/(performance.now()-t),pixelRatio:window.__huxi.renderer.getPixelRatio()}),2200)})');
   console.log('PERFORMANCE',JSON.stringify(checks.performance));
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
-  await evaluate('window.dispatchEvent(new Event("resize")); document.querySelector("#pd-back").click(); document.querySelector("#tl-home").click();');
+  await evaluate('window.dispatchEvent(new Event("resize")); document.querySelector("#pd-back").click(); document.querySelector("#search").value="";document.querySelector("#search").dispatchEvent(new Event("input"));document.querySelector("#tl-home").click();');
   await capture('v8-mobile');
+  checks.mobileList=await evaluate(`(()=>{const list=document.querySelector('#places').getBoundingClientRect(),toolbar=document.querySelector('#toolbar').getBoundingClientRect();return {listBottom:list.bottom,toolbarTop:toolbar.top};})()`);
+  assert.ok(checks.mobileList.listBottom<=checks.mobileList.toolbarTop,'phone place list must stop above navigation controls');
+  checks.mobileHome=await homeProjection();assert.ok(checks.mobileHome.inside&&checks.mobileHome.widthRatio>.8,'portrait home framing');
   checks.mobile={};
   for(const [asset,label] of [['zonghe','综合楼'],['teaching1','第一教学楼'],['info','信息技术科研楼'],['library','图书馆']]) {
     await evaluate(`document.querySelector('#pd-back').click();[...document.querySelectorAll('.place')].find(e=>e.querySelector('.nm').textContent===${JSON.stringify(label)}).click();`);

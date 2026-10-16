@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { boundsOf, frameBox, placeRoot } from "./landmarkViews";
+import { boundsOf, frameBox, framePoints, placeRoot } from "./landmarkViews";
 import { clipRoads, campusAreas } from "./campusClip";
 import { buildContext } from "./context";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -44,7 +44,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.03;
 app.appendChild(renderer.domElement);
 renderer.domElement.tabIndex = 0;
 renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus());
@@ -66,7 +66,7 @@ controls.target.copy(HOME_VIEW.target);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI * 0.49;
-controls.minDistance = 40;
+controls.minDistance = 12;
 controls.maxDistance = 8500;
 
 const hemi = new THREE.HemisphereLight(0xcfe5ff, 0xb8b09a, 1.1);
@@ -81,8 +81,8 @@ sun.shadow.camera.top = 1700;
 sun.shadow.camera.bottom = -1700;
 sun.shadow.camera.near = 10;
 sun.shadow.camera.far = 4500;
-sun.shadow.bias = -0.0006;
-sun.shadow.normalBias = .18;
+sun.shadow.bias = -0.00008;
+sun.shadow.normalBias = .07;
 scene.add(sun);
 scene.add(sun.target);
 
@@ -98,7 +98,12 @@ function resize(): void {
   renderer.setSize(window.innerWidth, window.innerHeight);
   labels.setSize(window.innerWidth, window.innerHeight);
 }
-window.addEventListener("resize", resize);
+window.addEventListener("resize", () => {
+  resize();
+  if (document.querySelector("#hud")!.classList.contains("detail-mode")) {
+    if (flyTargetBuilding) focusBuilding(flyTargetBuilding, lastBuildingView);
+  } else homeView();
+});
 resize();
 
 const raycaster = new THREE.Raycaster();
@@ -132,6 +137,7 @@ let navMode = false;
 let panel: PlacesPanel | null = null;
 let places: PlaceEntry[] = [];
 let boundaryLine: THREE.LineLoop | null = null;
+let lastBuildingView = "overview";
 
 // ---- 图层分组 ----
 const gGreen = new THREE.Group();
@@ -163,7 +169,10 @@ function bboxCenterOfBuilding(b: Building): [number, number] {
 function tagAsset(g: THREE.Group, b: Building, root: THREE.Group): void {
   const [cx, cy] = bboxCenterOfBuilding(b);
   g.traverse((o) => {
-    if (typeof o.userData.courtX === "number") root.userData.court = new THREE.Vector3(o.userData.courtX, 2, -o.userData.courtNorth);
+    if (typeof o.userData.courtX === "number") {
+      root.userData.court = new THREE.Vector3(o.userData.courtX, 2, -o.userData.courtNorth);
+      root.userData.courtRadius = o.userData.courtRadius;
+    }
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     mesh.castShadow = true; mesh.receiveShadow = true;
@@ -272,12 +281,15 @@ function openDetail(it: PlaceEntry): void {
 }
 
 function closeDetail(): void {
+  labels.active = "";
+  flyTargetBuilding = null;
   document.querySelector("#hud")!.classList.remove("detail-mode");
   document.querySelector("#place-detail")!.classList.remove("open");
 }
 
 function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
   if (!mesh) return;
+  lastBuildingView = view;
   const box = boundsOf(mesh);
   const usableWidth = window.innerWidth > 640 ? Math.max(240, window.innerWidth - 350) : window.innerWidth;
   const usableHeight = window.innerWidth > 640 ? window.innerHeight : window.innerHeight * .48;
@@ -287,9 +299,13 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
   let dir = new THREE.Vector3(.70,.80,1.0);
   if (view === "facade") { dir.set(.2,.35,1); distance *= .82; }
   if (view === "court") {
-    dir.set(.25,1.7,.45); distance = Math.max(75,distance*.36);
+    dir.set(.35,1.2,.85); distance = Math.max(75,distance*.36);
     const root = placeRoot(mesh);
     if (root.userData.court) center.copy(root.localToWorld((root.userData.court as THREE.Vector3).clone()));
+    if (root.userData.courtRadius) {
+      distance=THREE.MathUtils.clamp(root.userData.courtRadius*2.3,45,90);
+      center.y=(mesh.userData as BuildingUserData).height*.35;
+    }
   }
   // Compose into the actual free area, not behind the side/bottom panel.
   camera.setViewOffset(window.innerWidth, window.innerHeight,
@@ -299,12 +315,15 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
 }
 
 function homeView(): void {
-  camera.setViewOffset(window.innerWidth, window.innerHeight,
-    window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .20 : 0,
-    window.innerWidth, window.innerHeight);
-  const usable = Math.max(240, window.innerWidth - (window.innerWidth > 640 ? 340 : 0));
-  const fit = frameBox(campusBounds, camera.fov, {width: window.innerWidth, height: window.innerHeight, usableWidth: usable});
-  flyTo(camera, controls, fit.target, fit.distance * (window.innerWidth > 640 ? .70 : .90), 1100, new THREE.Vector3(.28,1.45,1));
+  if (!campusPoints.length) return;
+  const width=window.innerWidth,height=window.innerHeight,hud=document.querySelector("#hud")!;
+  const collapsed=hud.classList.contains("collapsed"),panel=hud.getBoundingClientRect();
+  const rect=width>640?{left:collapsed?24:panel.right+20,right:width-72,top:collapsed?75:24,bottom:height-24}
+    :{left:12,right:width-12,top:60,bottom:Math.min(height-24,panel.top-16)};
+  const direction=new THREE.Vector3(.28,1.45,1);
+  const fit=framePoints(campusPoints,camera.fov,{width,height},rect,direction);
+  camera.setViewOffset(width,height,fit.offset.x,fit.offset.y,width,height);
+  flyTo(camera,controls,fit.target,fit.distance,1100,direction);
 }
 
 function selectPlace(it: SearchItem): void {
@@ -321,7 +340,7 @@ function selectPlace(it: SearchItem): void {
 }
 
 // ---- 场景加载 ----
-const campusBounds = new THREE.Box3();
+const campusPoints: THREE.Vector3[] = [];
 let buildingsRef: THREE.Group | null = null;
 async function loadScene(): Promise<void> {
   const res = await fetch("data/scene.json");
@@ -332,7 +351,7 @@ async function loadScene(): Promise<void> {
   if (data.boundary) {
     const shape = new THREE.Shape(data.boundary.pts.map(([x,y]) => new THREE.Vector2(x,y)));
     const geo = new THREE.ShapeGeometry(shape); geo.rotateX(-Math.PI/2);
-    const campusGround = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color: 0xb4c59e}));
+    const campusGround = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color: 0xb1bd9b}));
     campusGround.position.y = -.15; campusGround.receiveShadow = true; scene.add(campusGround);
   }
   const campusGreen = campusAreas(data.green, data.boundary?.pts);
@@ -344,8 +363,10 @@ async function loadScene(): Promise<void> {
   buildRoads(gRoads, data.boundary ? clipRoads(data.roads, data.boundary.pts) : data.roads);
 
   if (data.boundary) {
-    for (const [x,y] of data.boundary.pts) campusBounds.expandByPoint(new THREE.Vector3(x, 0, -y));
-    campusBounds.max.y = 70;
+    for (const [x,y] of data.boundary.pts) campusPoints.push(new THREE.Vector3(x,0,-y));
+    for (const building of data.buildings.filter(b=>b.inside)) {
+      for (const [x,y] of building.polygon) campusPoints.push(new THREE.Vector3(x,building.height,-y));
+    }
   }
   const inside = data.buildings.filter((b) => b.inside);
   gContext.add(buildContext(data));
@@ -424,13 +445,15 @@ async function loadScene(): Promise<void> {
   for (const [name, mesh] of byName) {
     const box = boundsOf(mesh);
     const pos = box.getCenter(new THREE.Vector3()); pos.y = box.max.y + 5;
-    labels.add(name, pos, 3400, { priority: mesh.userData.pickRoot ? 5 : 1, onClick: () => { picker!.select(mesh); focusBuilding(mesh); } });
+    labels.add(name, pos, 6000, { priority: mesh.userData.pickRoot ? 5 : 1, onClick: () => {
+      const item=places.find(p=>p.name===name);if(item)selectPlace(item);
+    } });
   }
   for (const w of campusWater) {
     if (!w.name || w.inside === false) continue;
     const [cx, cy] = bboxCenter(w.outers[0]);
-    labels.add(w.name, new THREE.Vector3(cx, 2, -cy), 2000, {
-      cls: "water",
+    labels.add(w.name, new THREE.Vector3(cx, 2, -cy), 6000, {
+      cls: "water", priority: 3,
       onClick: () => { flyTo(camera, controls, new THREE.Vector3(cx, 0, -cy), 400); },
     });
   }
@@ -440,7 +463,7 @@ async function loadScene(): Promise<void> {
     const glb = asset ? await loadGateGLB(asset, g) : null;
     scene.add(glb ?? buildGate(g));
     const lb = gateLabel(g);
-    labels.add(lb.text, lb.pos, 3000, { cls: "gate", onClick: () => {
+    labels.add(lb.text, lb.pos, 6000, { cls: "gate", onClick: () => {
       flyTo(camera, controls, new THREE.Vector3(g.x, 0, -g.y), 320);
     } });
   }
@@ -667,6 +690,7 @@ document.querySelector("#nav-exit")!.addEventListener("click", () => setNavMode(
 // ---- 折叠 ----
 document.querySelector<HTMLButtonElement>("#hud-fold")!.addEventListener("click", () => {
   document.querySelector("#hud")!.classList.toggle("collapsed");
+  if (!document.querySelector("#hud")!.classList.contains("detail-mode")) homeView();
 });
 
 // ---- 右侧控件 ----
@@ -802,7 +826,7 @@ renderer.setAnimationLoop((t) => {
   sun.target.position.copy(controls.target);
   Object.assign(sun.shadow.camera, { left: -shadowSize, right: shadowSize, top: shadowSize, bottom: -shadowSize });
   sun.shadow.camera.updateProjectionMatrix();
-  labels.update(camera);
+  labels.update(camera, controls.target);
   renderer.render(scene, camera);
   labels.render(scene, camera);
 });

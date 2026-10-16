@@ -1,7 +1,62 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { areaCenter, clipRoads, distanceToCampus, inCampus } from './campusClip.ts';
-import type { SceneData } from './types';
+import { clipRoads, distanceToCampus, distanceToBoundary, inCampus } from './campusClip.ts';
+import type { Area, SceneData } from './types';
+
+type Point=[number,number];
+type Vertex={point:Point;distance:number};
+
+/** Clip triangulated surfaces to the context band at a coarse 24m resolution.
+ *  Native ShapeGeometry preserves the source outlines and islands; no boolean library.
+ */
+export function contextSurface(area:Area,ring:Point[]):THREE.BufferGeometry {
+  const positions:number[]=[];
+  const vertex=(point:Point):Vertex=>({point,distance:distanceToBoundary(point,ring)*(inCampus(point,ring)?-1:1)});
+  function cut(polygon:Vertex[],limit:number,above:boolean):Vertex[] {
+    const out:Vertex[]=[];
+    const inside=(p:Vertex)=>above?p.distance>=limit:p.distance<=limit;
+    for(let i=0;i<polygon.length;i++) {
+      const a=polygon[i],b=polygon[(i+1)%polygon.length];
+      if(inside(a)!==inside(b)) {
+        let lo=a,hi=b;
+        for(let j=0;j<13;j++) {
+          const mid=vertex([(lo.point[0]+hi.point[0])/2,(lo.point[1]+hi.point[1])/2]);
+          if(inside(mid)===inside(a))lo=mid;else hi=mid;
+        }
+        out.push(inside(lo)?lo:hi);
+      }
+      if(inside(b))out.push(b);
+    }
+    return out;
+  }
+  function triangle(a:Vertex,b:Vertex,c:Vertex):void {
+    const edges=[Math.hypot(a.point[0]-b.point[0],a.point[1]-b.point[1]),Math.hypot(b.point[0]-c.point[0],b.point[1]-c.point[1]),Math.hypot(c.point[0]-a.point[0],c.point[1]-a.point[1])];
+    const longest=Math.max(...edges),distances=[a.distance,b.distance,c.distance];
+    if(Math.min(...distances)-longest>200||Math.max(...distances)+longest<0)return;
+    if(longest>24) {
+      const vertices=[a,b,c],i=edges.indexOf(longest),start=vertices[i],end=vertices[(i+1)%3],other=vertices[(i+2)%3];
+      const mid=vertex([(start.point[0]+end.point[0])/2,(start.point[1]+end.point[1])/2]);
+      triangle(start,mid,other);triangle(mid,end,other);return;
+    }
+    const clipped=cut(cut([a,b,c],0,true),200,false);
+    for(let i=1;i<clipped.length-1;i++) {
+      const [a,b,c]=[clipped[0],clipped[i],clipped[i+1]].map(v=>v.point.map(Math.fround));
+      if(Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))<.0001)continue;
+      for(const [x,y]of [a,b,c])positions.push(x,.006,-y);
+    }
+  }
+  for(const outer of area.outers) {
+    const shape=new THREE.Shape(outer.map(p=>new THREE.Vector2(...p)));
+    for(const hole of area.inners)if(inCampus(hole[0],outer))shape.holes.push(new THREE.Path(hole.map(p=>new THREE.Vector2(...p))));
+    const geometry=new THREE.ShapeGeometry(shape),p=geometry.attributes.position,index=geometry.index!;
+    for(let i=0;i<index.count;i+=3) {
+      const corners=[0,1,2].map(k=>{const n=index.getX(i+k);return vertex([p.getX(n),p.getY(n)]);});
+      triangle(corners[0],corners[1],corners[2]);
+    }
+    geometry.dispose();
+  }
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));return geometry;
+}
 
 /** A bounded, disposable background: no textures, shadows, labels or picking. */
 export function buildContext(data: SceneData): THREE.Group {
@@ -9,6 +64,7 @@ export function buildContext(data: SceneData): THREE.Group {
   const ring=data.boundary?.pts;
   const metrics={buildings:0,roadSegments:0,areas:0,triangles:0,drawCalls:0,radius:200};
   root.userData.metrics=metrics;
+  root.userData.surfaceIds=[];
   if(!ring?.length)return root;
   const buckets=new Map<string,THREE.BufferGeometry[]>();
   const background=new THREE.Color(0xd6d8c8);
@@ -48,10 +104,10 @@ export function buildContext(data: SceneData): THREE.Group {
   add('ground',groundGeo,0xc5cbbb);
   for(const area of [...data.green,...data.water,...data.paving]) {
     const outer=area.outers[0];if(!outer?.length)continue;
-    const center=areaCenter(area);
-    if(inCampus(center,ring)||distanceToCampus(center,ring)>200||outer.some(p=>distanceToCampus(p,ring)>200))continue;
     const isWater=data.water.includes(area)||area.kind==='pool';
-    if(add('surfaces',flat(outer,isWater ? .008 : .006),isWater?0x9bafaf:0xb7c2a7))metrics.areas++;
+    const geometry=contextSurface(area,ring);
+    if(!geometry.attributes.position.count){geometry.dispose();continue;}
+    if(add('surfaces',geometry,isWater?0x9bafaf:0xb7c2a7)){metrics.areas++;root.userData.surfaceIds.push(area.id);}
   }
   for(const road of clipRoads(data.roads,ring,200)) {
     const [a,b]=road.pts,mid:[number,number]=[(a[0]+b[0])/2,(a[1]+b[1])/2];

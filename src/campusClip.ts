@@ -23,6 +23,10 @@ export function inCampus([x,y]: Point, ring: Point[]): boolean {
 
 export function distanceToCampus(point: Point, ring: Point[]): number {
   if (inCampus(point,ring)) return 0;
+  return distanceToBoundary(point,ring);
+}
+
+export function distanceToBoundary(point: Point, ring: Point[]): number {
   let distance=Infinity;
   for(let i=0;i<ring.length;i++) {
     const a=ring[i],b=ring[(i+1)%ring.length],dx=b[0]-a[0],dy=b[1]-a[1];

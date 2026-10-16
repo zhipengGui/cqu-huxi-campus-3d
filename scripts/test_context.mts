@@ -21,8 +21,16 @@ assert.ok(visible.every(r=>r.pts.every(p=>distanceToCampus(p,boundary)<=200.001)
 assert.equal(road.pts[0][1],-500,'preserve original navigation inputs');
 const corner=clipRoads([{...road,pts:[[-500,-500],[-50,-50]]}],boundary,200);
 assert.ok(corner.length>0&&Math.abs(distanceToCampus(corner[0].pts[0],boundary)-200)<.001,'rounded buffer corners');
-const {buildContext}=await import('../src/context.ts');
+const {buildContext,contextSurface}=await import('../src/context.ts');
 const context=buildContext(data);
+assert.ok(context.userData.surfaceIds?.includes(773911408),'retain nearby part of the large park');
+assert.ok(context.userData.surfaceIds?.includes(17784946),'retain nearby part of the crossing water polygon');
+for(const id of [773911408,17784946]) {
+  const area=[...data.green,...data.water].find(a=>a.id===id),geometry=contextSurface(area,data.boundary.pts),p=geometry.attributes.position;
+  assert.ok(p.count>0);
+  for(let i=0;i<p.count;i++)assert.ok(distanceToCampus([p.getX(i),-p.getZ(i)],data.boundary.pts)<200.05,'surface extends beyond context band');
+  for(let i=0;i<p.count;i+=3){const a=[p.getX(i+1)-p.getX(i),p.getZ(i+1)-p.getZ(i)],b=[p.getX(i+2)-p.getX(i),p.getZ(i+2)-p.getZ(i)];assert.ok(Math.abs(a[0]*b[1]-a[1]*b[0])>1e-5,'degenerate clipped surface triangle');}
+}
 let triangles=0,calls=0;
 context.traverse(o=>{if(o.isMesh){calls++;triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3;assert.ok(!o.castShadow&&!o.receiveShadow);assert.ok(!o.userData.id&&!o.userData.pickRoot);}});
 assert.ok(calls>0&&calls<=20&&triangles<=50000,'context must fit the approved geometry/draw budget');

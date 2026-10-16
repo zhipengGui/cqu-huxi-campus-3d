@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { Box3, Vector3, PerspectiveCamera } from 'three';
-import { frameBox } from '../src/landmarkViews.ts';
+import { frameBox, framePoints } from '../src/landmarkViews.ts';
+import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 const box = new Box3(new Vector3(10,0,20),new Vector3(210,30,120));
 const desktop = frameBox(box,50,{width:1440,height:960,usableWidth:1090});
@@ -25,6 +26,20 @@ for (const size of [[200,30,100],[100,67,95]]) {
   }
 }
 console.log('PASS actual portrait projection clears toolbar and detail panel');
+const data=JSON.parse(readFileSync(new URL('../public/data/scene.json',import.meta.url),'utf8'));
+const points=data.boundary.pts.map(([x,y])=>new Vector3(x,0,-y));
+for(const b of data.buildings.filter(b=>b.inside))for(const [x,y] of b.polygon)points.push(new Vector3(x,b.height,-y));
+for(const [width,height,rect] of [[1440,960,{left:304,right:1368,top:24,bottom:936}],[390,844,{left:12,right:378,top:60,bottom:461}]]) {
+  const direction=new Vector3(.28,1.45,1),fit=framePoints(points,50,{width,height},rect,direction);
+  const camera=new PerspectiveCamera(50,width/height,2,18000);
+  camera.setViewOffset(width,height,fit.offset.x,fit.offset.y,width,height);
+  camera.position.copy(fit.target).add(direction.normalize().multiplyScalar(fit.distance));camera.lookAt(fit.target);camera.updateMatrixWorld();
+  const projected=points.map(p=>{const v=p.clone().project(camera);return [(v.x+1)*width/2,(1-v.y)*height/2];});
+  assert.ok(projected.every(([x,y])=>x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom),'actual campus points must clear UI');
+  const span=Math.max(...projected.map(p=>p[0]))-Math.min(...projected.map(p=>p[0]));
+  assert.ok(span/(rect.right-rect.left)>.70,'campus should fill the free width');
+}
+console.log('PASS complete campus projection and screen occupancy on desktop and phone');
 assert.ok(existsSync(new URL('../src/campusClip.ts',import.meta.url)),'visual road clipping missing');
 const { clipRoads } = await import('../src/campusClip.ts');
 const ring: [number,number][] = [[0,0],[10,0],[10,10],[0,10]];
