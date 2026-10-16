@@ -4,7 +4,7 @@ Three.js + TypeScript 校园交互地图。普通建筑由 OSM 数据生成，�
 
 [已发布站点](https://zhipenggui.github.io/cqu-huxi-campus-3d/) · [源码](https://github.com/zhipengGui/cqu-huxi-campus-3d)
 
-**v9 上线候选版在 `feat/huxi-showcase-v9` 本地分支，等待视觉验收，尚未推送或更新线上站点。**
+**v9 已于 2026-10-17 通过用户视觉验收，并获准推送。GitHub Pages 随 `main` 分支更新自动部署。**
 
 ## 预览
 
