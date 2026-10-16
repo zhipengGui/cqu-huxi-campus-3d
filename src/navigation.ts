@@ -1,268 +1,72 @@
-import * as THREE from "three";
-import type { RoadGraph } from "./types";
+import * as THREE from 'three';
+import type {RoadGraph} from './types';
+import {RoadRouter,type RoadSnap,type RoadRoute} from './routing.ts';
+import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import {resolveAccess} from './accessPoints.ts';
 
-/** 步行导航：A* 寻路 + 路线绘制。
- *  图来自管线（节点=道路折线点 0.5m 网格去重，边=相邻点段），起点/终点
- *  通过"吸附到最近路段"接入图（虚拟起终点的多源 A*）。 */
-
-interface Snap {
-  a: number; // 边端点索引
-  b: number;
-  t: number; // 投影位置 0..1
+export interface NavEndpoint {snap:RoadSnap;label:string}
+function marker(color:number):THREE.Mesh {
+  const mesh=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.4,.8,20),new THREE.MeshBasicMaterial({color}));
+  mesh.visible=false;mesh.renderOrder=5;return mesh;
 }
 
-class MinHeap {
-  private a: [number, number][] = []; // [priority, node]
-  push(p: number, v: number): void {
-    this.a.push([p, v]);
-    let i = this.a.length - 1;
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (this.a[parent][0] <= this.a[i][0]) break;
-      [this.a[parent], this.a[i]] = [this.a[i], this.a[parent]];
-      i = parent;
-    }
-  }
-  pop(): [number, number] | undefined {
-    if (!this.a.length) return undefined;
-    const top = this.a[0];
-    const last = this.a.pop()!;
-    if (this.a.length) {
-      this.a[0] = last;
-      let i = 0;
-      for (;;) {
-        const l = i * 2 + 1;
-        const r = l + 1;
-        let m = i;
-        if (l < this.a.length && this.a[l][0] < this.a[m][0]) m = l;
-        if (r < this.a.length && this.a[r][0] < this.a[m][0]) m = r;
-        if (m === i) break;
-        [this.a[m], this.a[i]] = [this.a[i], this.a[m]];
-        i = m;
-      }
-    }
-    return top;
-  }
-  get size(): number {
-    return this.a.length;
-  }
-}
-
-function markerMesh(color: number): THREE.Mesh {
-  const g = new THREE.CylinderGeometry(2.4, 2.4, 0.8, 20);
-  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color }));
-  m.visible = false;
-  m.renderOrder = 5;
-  return m;
-}
-
+/** UI adapter; all route points are rendered without cutting road corners. */
 export class Navigator {
-  active = false;
-  onStatus: (text: string) => void = () => {};
-  private adj: Array<Array<{ to: number; len: number }>> = [];
-  private nodes: [number, number][] = [];
-  private start: Snap | null = null;
-  private end: Snap | null = null;
-  private hasRoute = false;
-  private routeMesh: THREE.Mesh | null = null;
-  private readonly markerA: THREE.Mesh;
-  private readonly markerB: THREE.Mesh;
-
-  constructor(private scene: THREE.Scene, graph: RoadGraph) {
-    this.nodes = graph.nodes;
-    this.adj = graph.nodes.map(() => []);
-    for (const [a, b, len] of graph.edges) {
-      this.adj[a].push({ to: b, len });
-      this.adj[b].push({ to: a, len });
-    }
-    this.markerA = markerMesh(0x2e9e4f);
-    this.markerB = markerMesh(0xd23f31);
-    scene.add(this.markerA);
-    scene.add(this.markerB);
+  active=false;
+  onStatus:(text:string)=>void=()=>{};
+  onChange:()=>void=()=>{};
+  readonly router:RoadRouter;
+  start:NavEndpoint|null=null;
+  end:NavEndpoint|null=null;
+  result:RoadRoute|null=null;
+  private scene:THREE.Scene;
+  private routeMesh:THREE.Group|null=null;
+  private markerA=marker(0x2e9e4f);
+  private markerB=marker(0xd23f31);
+  constructor(scene:THREE.Scene,graph:RoadGraph){this.scene=scene;this.router=new RoadRouter(graph);scene.add(this.markerA,this.markerB);}
+  setActive(v:boolean):void {this.active=v;if(!v)this.clearRoute();else this.recompute();}
+  snap(x:number,z:number,maxDistance=140):RoadSnap|null {return this.router.snap(x,-z,maxDistance);}
+  setStart(x:number,z:number,label='地图起点',maxDistance=140):boolean {return this.setEndpoint('start',x,z,label,maxDistance);}
+  setEnd(x:number,z:number,label='地图终点',maxDistance=140):boolean {return this.setEndpoint('end',x,z,label,maxDistance);}
+  private setEndpoint(which:'start'|'end',x:number,z:number,label:string,maxDistance:number):boolean {
+    const snap=this.snap(x,z,maxDistance);if(!snap){this.onStatus('附近没有道路，请点更靠近道路的位置');return false;}
+    this[which]={snap,label};this.recompute();return true;
   }
-
-  setActive(v: boolean): void {
-    this.active = v;
-    if (!v) {
-      this.clearRoute();
-    }
-    this.onStatus(v ? "点击道路或地面设置起点" : "");
+  clickGround(x:number,z:number):void {
+    if(this.result){this.clearRoute();this.setStart(x,z);}else if(!this.start)this.setStart(x,z);else this.setEnd(x,z);
   }
-
-  /** 吸附最近路段；maxDist 米内无路返回 null。x/z 为世界坐标。 */
-  snap(x: number, z: number, maxDist = 140): Snap | null {
-    const wy = -z;
-    let best: Snap | null = null;
-    let bestD = Infinity;
-    for (let i = 0; i < this.adj.length; i++) {
-      // 只遍历有邻边的节点对应的边：改为直接遍历邻接表去重太繁，这里遍历节点+首个邻边由 edgeIter 完成
-    }
-    for (let a = 0; a < this.nodes.length; a++) {
-      const [ax, ay] = this.nodes[a];
-      for (const { to: b, len } of this.adj[a]) {
-        void len;
-        if (b < a) continue; // 每条边只处理一次
-        const [bx, by] = this.nodes[b];
-        const dx = bx - ax;
-        const dy = by - ay;
-        const len2 = dx * dx + dy * dy;
-        if (!len2) continue;
-        let t = ((x - ax) * dx + (wy - ay) * dy) / len2;
-        t = Math.max(0, Math.min(1, t));
-        const px = ax + t * dx;
-        const py = ay + t * dy;
-        const d = Math.hypot(x - px, wy - py);
-        if (d < bestD) {
-          bestD = d;
-          best = { a, b, t };
+  setEndBuilding(x:number,z:number,name='建筑'):void {
+    const access=resolveAccess(name,[x,-z],this.router);if(!access){this.onStatus('该地点附近没有可导航道路');return;}
+    this.end={snap:access.snap,label:access.label};this.recompute();
+  }
+  swap():void {[this.start,this.end]=[this.end,this.start];this.recompute();}
+  clearRoute():void {this.start=null;this.end=null;this.recompute();}
+  private clearDrawing():void {
+    if(this.routeMesh){this.scene.remove(this.routeMesh);this.routeMesh.traverse(o=>{const m=o as THREE.Mesh;if(m.isMesh){m.geometry.dispose();for(const mat of Array.isArray(m.material)?m.material:[m.material])mat.dispose();}});this.routeMesh=null;}
+    this.result=null;
+  }
+  recompute():void {
+    this.clearDrawing();
+    for(const [endpoint,m]of [[this.start,this.markerA],[this.end,this.markerB]] as const){m.visible=!!endpoint;if(endpoint){const [x,y]=this.router.point(endpoint.snap);m.position.set(x,.4,-y);}}
+    let status=this.start?'起点已设：点击楼栋或地面设置终点':this.end?'终点已设：请设置起点':'点击道路或地面设置起点';
+    if(this.start&&this.end){
+      const route=this.router.route(this.start.snap,this.end.snap);
+      if(!route)status='未找到可达路线';
+      else if(route.distanceMeters<1)status='起点和终点太近了';
+      else {
+        this.result=route;const root=new THREE.Group(),mat=new THREE.MeshBasicMaterial({color:0xff7a1a});
+        // Each segment follows the road exactly; merge for a single draw call.
+        const up=new THREE.Vector3(0,1,0),geometries:THREE.BufferGeometry[]=[];
+        for(let i=1;i<route.points.length;i++){
+          const a=new THREE.Vector3(route.points[i-1][0],.28,-route.points[i-1][1]),b=new THREE.Vector3(route.points[i][0],.28,-route.points[i][1]),d=b.clone().sub(a),length=d.length();
+          if(length<1e-6)continue;
+          const g=new THREE.CylinderGeometry(.7,.7,length,6);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up,d.normalize()));const center=a.add(b).multiplyScalar(.5);g.translate(center.x,center.y,center.z);geometries.push(g);
         }
+        const geometry=mergeGeometries(geometries);for(const g of geometries)g.dispose();
+        if(geometry){const mesh=new THREE.Mesh(geometry,mat);mesh.renderOrder=6;root.add(mesh);}else mat.dispose();this.routeMesh=root;this.scene.add(root);
+        status=`路线 ${Math.round(route.distanceMeters)} m · 步行约 ${Math.max(1,Math.round(route.distanceMeters/80))} 分钟`;
       }
     }
-    if (!best || bestD > maxDist) return null;
-    return best;
-  }
-
-  private place(marker: THREE.Mesh, s: Snap): void {
-    const [ax, ay] = this.nodes[s.a];
-    const [bx, by] = this.nodes[s.b];
-    marker.position.set(ax + (bx - ax) * s.t, 0.4, -(ay + (by - ay) * s.t));
-    marker.visible = true;
-  }
-
-  private snapPoint(s: Snap): THREE.Vector3 {
-    const [ax, ay] = this.nodes[s.a];
-    const [bx, by] = this.nodes[s.b];
-    return new THREE.Vector3(ax + (bx - ax) * s.t, 0.09, -(ay + (by - ay) * s.t));
-  }
-
-  /** 地面点击（导航模式下）。x/z 为世界坐标。 */
-  clickGround(x: number, z: number): void {
-    const s = this.snap(x, z);
-    if (!s) {
-      this.onStatus("附近没有道路，请点更靠近道路的位置");
-      return;
-    }
-    if (!this.start || this.hasRoute) {
-      this.resetRoute();
-      this.start = s;
-      this.place(this.markerA, s);
-      this.onStatus("起点已设：点击楼栋或地面设置终点");
-    } else {
-      this.end = s;
-      this.place(this.markerB, s);
-      this.computeRoute();
-    }
-  }
-
-  /** 楼栋作为终点（世界坐标楼中心） */
-  setEndBuilding(cx: number, cz: number): void {
-    const s = this.snap(cx, cz, 320);
-    if (!s) {
-      this.onStatus("该楼附近没有可导航的道路");
-      return;
-    }
-    this.end = s;
-    this.place(this.markerB, s);
-    this.computeRoute();
-  }
-
-  private resetRoute(): void {
-    if (this.routeMesh) {
-      this.scene.remove(this.routeMesh);
-      this.routeMesh.geometry.dispose();
-      this.routeMesh = null;
-    }
-    this.hasRoute = false;
-  }
-
-  clearRoute(): void {
-    this.resetRoute();
-    this.start = null;
-    this.end = null;
-    this.markerA.visible = false;
-    this.markerB.visible = false;
-    this.onStatus(this.active ? "点击道路或地面设置起点" : "");
-  }
-
-  private computeRoute(): void {
-    this.resetRoute();
-    if (!this.start || !this.end) return;
-    const result = this.astar(this.start, this.end);
-    if (!result) {
-      this.onStatus("未找到可达路线");
-      return;
-    }
-    const pts = [this.snapPoint(this.start)];
-    for (const idx of result.nodes) {
-      pts.push(new THREE.Vector3(this.nodes[idx][0], 0.09, -this.nodes[idx][1]));
-    }
-    pts.push(this.snapPoint(this.end));
-    if (pts.length === 2 && pts[0].distanceTo(pts[1]) < 1) {
-      this.onStatus("起点和终点太近了");
-      return;
-    }
-    const curve = new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.15);
-    const geo = new THREE.TubeGeometry(curve, Math.min(600, Math.max(24, pts.length * 6)), 1.0, 6, false);
-    this.routeMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff7a1a }));
-    this.routeMesh.renderOrder = 6;
-    this.scene.add(this.routeMesh);
-    this.hasRoute = true;
-    let dist = 0;
-    for (let i = 1; i < pts.length; i++) dist += pts[i].distanceTo(pts[i - 1]);
-    const minutes = Math.max(1, Math.round(dist / 80));
-    this.onStatus(`路线 ${Math.round(dist)} m · 步行约 ${minutes} 分钟`);
-  }
-
-  /** 多源 A*：起终点各自吸附在边 (a,b) 上，按 t 拆分初始代价 */
-  private astar(s: Snap, e: Snap): { nodes: number[] } | null {
-    const goals = new Set([e.a, e.b]);
-    const [gx1, gy1] = this.nodes[e.a];
-    const [gx2, gy2] = this.nodes[e.b];
-    const h = (idx: number): number => {
-      const [x, y] = this.nodes[idx];
-      return Math.min(Math.hypot(x - gx1, y - gy1), Math.hypot(x - gx2, y - gy2));
-    };
-    const [sa, sb] = this.splitCost(s);
-    const dist = new Map<number, number>([[s.a, sa], [s.b, sb]]);
-    const prev = new Map<number, number>();
-    const heap = new MinHeap();
-    heap.push(sa + h(s.a), s.a);
-    heap.push(sb + h(s.b), s.b);
-    const settled = new Set<number>();
-    let goal = -1;
-    while (heap.size) {
-      const [, u] = heap.pop()!;
-      if (settled.has(u)) continue;
-      settled.add(u);
-      if (goals.has(u)) {
-        goal = u;
-        break;
-      }
-      const du = dist.get(u) ?? Infinity;
-      for (const { to, len } of this.adj[u]) {
-        if (settled.has(to)) continue;
-        const nd = du + len;
-        if (nd < (dist.get(to) ?? Infinity)) {
-          dist.set(to, nd);
-          prev.set(to, u);
-          heap.push(nd + h(to), to);
-        }
-      }
-    }
-    if (goal < 0) return null;
-    const chain: number[] = [];
-    for (let cur = goal; ; cur = prev.get(cur)!) {
-      if (cur === s.a || cur === s.b) break;
-      chain.unshift(cur);
-      if (!prev.has(cur)) return null;
-    }
-    return { nodes: chain };
-  }
-
-  private splitCost(n: Snap): [number, number] {
-    const [ax, ay] = this.nodes[n.a];
-    const [bx, by] = this.nodes[n.b];
-    const L = Math.hypot(bx - ax, by - ay);
-    return [L * n.t, L * (1 - n.t)];
+    this.onStatus(status);this.onChange();
   }
 }

@@ -1,0 +1,112 @@
+[
+  {
+    "name": "图书馆",
+    "point": [
+      298.38,
+      -17.27
+    ],
+    "confirmed": false,
+    "label": "图书馆附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "学生活动中心",
+    "point": [
+      34.12,
+      -241.53
+    ],
+    "confirmed": false,
+    "label": "学生活动中心附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "体育馆",
+    "point": [
+      658.08,
+      661.05
+    ],
+    "confirmed": false,
+    "label": "体育馆附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "第一教学楼",
+    "point": [
+      331.5,
+      326.82
+    ],
+    "confirmed": false,
+    "label": "第一教学楼附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "理科楼",
+    "point": [
+      -108.5,
+      -139.0
+    ],
+    "confirmed": false,
+    "label": "理科楼附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "信息技术科研楼",
+    "point": [
+      669.33,
+      371.17
+    ],
+    "confirmed": false,
+    "label": "信息技术科研楼附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "综合楼",
+    "point": [
+      56.89,
+      320.79
+    ],
+    "confirmed": false,
+    "label": "综合楼附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "工科大楼",
+    "point": [
+      -207.56,
+      -263.77
+    ],
+    "confirmed": false,
+    "label": "工科大楼附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "北门",
+    "point": [
+      510.0,
+      679.63
+    ],
+    "confirmed": false,
+    "label": "北门附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "东门",
+    "point": [
+      745.92,
+      207.0
+    ],
+    "confirmed": false,
+    "label": "东门附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  },
+  {
+    "name": "西门",
+    "point": [
+      -588.45,
+      380.0
+    ],
+    "confirmed": false,
+    "label": "西门附近道路",
+    "source": "OSM 地点中心至最近路段投影，待入口核实"
+  }
+]

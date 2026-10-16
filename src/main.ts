@@ -366,7 +366,7 @@ function homeView(): void {
 
 function selectPlace(it: SearchItem): void {
   if (navMode && navigator) {
-    navigator.setEndBuilding(it.target.x, it.target.z);
+    navigator.setEndBuilding(it.target.x, it.target.z,it.name);
     flyTo(camera, controls, it.target, it.distance);
     return;
   }
@@ -462,7 +462,7 @@ async function loadScene(): Promise<void> {
     onSelect: (mesh) => {
       if (navMode && navigator) {
         const d = mesh.userData as BuildingUserData;
-        navigator.setEndBuilding(d.cx, d.cy);
+        navigator.setEndBuilding(d.cx, d.cy,d.name);
         return;
       }
       const entry = places.find((p) => p.mesh === mesh || p.name === (mesh.userData as BuildingUserData).name);
