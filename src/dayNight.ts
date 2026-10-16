@@ -50,6 +50,19 @@ export function currentBaseEmissive(): number {
   return baseEmissive;
 }
 
+/** Apply the current lighting to all materials, retaining whole-building selection. */
+export function applyBuildingEmissive(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const pickRoot = (mesh.userData.pickRoot as THREE.Object3D | undefined) ?? mesh;
+    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const mat = material as THREE.MeshStandardMaterial;
+      if (mat.emissive) mat.emissive.setHex(pickRoot.userData.highlightColor ?? baseEmissive);
+    }
+  });
+}
+
 export class DayNight {
   constructor(
     private scene: THREE.Scene,
@@ -70,13 +83,7 @@ export class DayNight {
     this.sun.position.set(...p.sunPos);
     this.sun.castShadow = p.shadows;
     baseEmissive = p.emissive;
-    this.buildings.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) {
-        const mat = mesh.material as THREE.MeshLambertMaterial;
-        if (mat && mat.emissive) mat.emissive.setHex(p.emissive);
-      }
-    });
+    applyBuildingEmissive(this.buildings);
     document.body.classList.toggle("night", name === "night");
   }
 }

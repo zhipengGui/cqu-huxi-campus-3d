@@ -20,6 +20,9 @@ for asset in args.assets:
         n=struct.unpack_from('<I',data,12)[0];gltf=json.loads(data[20:20+n])
         assert any(node.get('extras',{}).get('buildingId')==str(report['buildingId']) for node in gltf['nodes'])
         assert 'KHR_draco_mesh_compression' in gltf.get('extensionsRequired',[])
+        triangles=sum(gltf['accessors'][p['indices']]['count']//3 for mesh in gltf['meshes'] for p in mesh['primitives'])
+        assert triangles==report['triangles'],f'{asset}: exported geometry differs from report ({triangles})'
+        assert len(gltf.get('materials',[]))==report['materials']
         assert report['roofCourtyardsOpen']
         if asset in ('zonghe','teaching1','info','likelou','gongke'):assert report['courtyards']>0
         assert report['bounds'][0][2]>=0, 'below global map ground'

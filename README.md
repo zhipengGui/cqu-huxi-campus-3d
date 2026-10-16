@@ -1,92 +1,66 @@
 # 重庆大学虎溪校区 3D 地图
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Three.js-000000?style=flat&logo=threedotjs&logoColor=white" alt="Three.js">
-  <img src="https://img.shields.io/badge/Blender-E87D0D?style=flat&logo=blender&logoColor=white" alt="Blender">
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License">
-  <img src="https://img.shields.io/badge/Data-OpenStreetMap-387C44?style=flat&logo=openstreetmap&logoColor=white" alt="OpenStreetMap">
-</p>
+Three.js + TypeScript 校园交互地图。普通建筑由 OSM 数据生成，重点地标使用 Blender GLB；参考 [gxu-campus-3d](https://github.com/wcqqq1214/gxu-campus-3d) 的表现方式。
 
-重庆大学虎溪校区的可旋转三维交互地图，使用 Three.js + Blender 制作，基于 OpenStreetMap 数据建模，对标 [gxu-campus-3d](https://github.com/wcqqq1214/gxu-campus-3d) 风格。
+[已发布站点](https://zhipenggui.github.io/cqu-huxi-campus-3d/) · [源码](https://github.com/zhipengGui/cqu-huxi-campus-3d)
 
-**在线游览：<https://zhipenggui.github.io/cqu-huxi-campus-3d/>** · **源码：[zhipengGui/cqu-huxi-campus-3d](https://github.com/zhipengGui/cqu-huxi-campus-3d)**
+**v7 当前在 `feat/huxi-landmarks-v7` 本地开发分支，等待视觉验收，尚未推送或更新线上站点。**
 
-数据来自 OpenStreetMap（© OpenStreetMap 贡献者，ODbL）。
+## 预览
 
-## 截图
+![综合楼：真实屋面开洞、深窗和院落](docs/screenshots/v7-zonghe.png)
 
-> 待补充：自行截取下方场景，保存到 `docs/screenshots/` 后在 README 引用。
+![信息技术科研楼](docs/screenshots/v7-info.png)
 
-建议截图清单：校园全景俯视、图书馆精模近景、东门门柱广场、步行导航路线、夜景光影、手机端界面。
+## 启动
 
-## 快速开始
-
-```bash
+```sh
 npm install
-npm run dev        # 打开终端提示的 http://localhost:5188/
+npm run dev
+npm run build
 ```
 
-操作：左键拖拽旋转 · 滚轮缩放 · 右键平移 · 点击楼栋看信息 · 搜索框查楼/湖/门 ·
-「导航」步行寻路（点路面设起点，再点楼栋或地面设终点）· 昼/昏/夜 · 「标注」开关。
+本地地址 http://localhost:5188/ 。鼠标拖拽旋转、滚轮缩放、右键平移；手机支持触摸。可通过地点列表或搜索定位，切换鸟瞰/立面/近景、光影、图层和画质，也可使用精选巡游及步行导航。
 
-## 数据管线（已固化，无需重跑）
+## v7 已实现
 
-```bash
-py scripts/fetch_osm.py         # 拉取 OSM 快照（多数据源兜底）→ data/snapshots/
-py scripts/build_scene_data.py  # 快照 → public/data/scene.json（局部米制坐标）
+- 8 栋建筑：综合楼、第一教学楼、信息技术科研楼、图书馆、理科楼、体育馆、学生活动中心、工科大楼；北门、东门、西门。
+- 建筑各有远/近两档 Draco GLB；先载远景，接近且画质允许时再载近景。全部建筑双档合计 9,167,108 字节，三座门约 72 KB；并非首屏一次加载全部近景。
+- 综合楼、一教、信息楼、理科楼、工科楼的院落屋面保留真实开口。综合楼包含石材深窗、柱廊和水池；信息楼包含白色框架、后退玻璃、穿孔屏和连廊。
+- 按完整地标边界取景；手机详情可滚动，底部面板不遮住鸟瞰主体。整栋选择高亮随 LOD 和光影切换保持一致。
+- 校内道路视觉裁剪，近邻背景建筑淡化；保留原导航图和已确认的运动场数据。标签按优先级避让。
+
+## 数据和模型重建
+
+快照已经入库，日常开发无需联网重抓。修改楼高时编辑 `data/height_overrides.json`，修改地标建模参数时编辑 `data/landmark_details.json`；相关高度要保持一致，再依次重建场景和模型。
+
+```sh
+py scripts/build_scene_data.py
+blender -b --python scripts/blender/build_priority.py -- --asset all
+blender -b --python scripts/blender/build_gates.py
 ```
 
-快照已进 git，日常开发直接 `npm run dev`。
+单栋示例：`blender -b --python scripts/blender/build_priority.py -- --asset zonghe`。需要本机 Blender 4.5 和可用中文字体；本项目使用 `D:\tools\blender-4.5.9-windows-x64\blender.exe`。旧入口 `build_models.py` 已转发到 v7 生成器。
 
-### 楼高校准（height_overrides）
+产物包括 `public/models/*.glb`、对应导出报告，以及 `work/render/*.blend` 可编辑工程和建模预览。`work/` 不入 Git，可按命令重建。坐标保持原 OSM 方位，原点是外轮廓包围盒中心；浏览器只平移模型，不再随意旋转、缩放以适配占地。
 
-`data/height_overrides.json`：
+## 验证
 
-```json
-{ "byId": {}, "byName": { "图书馆": { "levels": 8 } } }
+```sh
+py scripts/test_landmark_geometry.py
+py scripts/check_landmarks.py --assets zonghe teaching1 info library likelou gym activity gongke
+node scripts/test_views.mts
+npm run build
 ```
 
-- `byId` 按 OSM 要素 id 匹配（信息卡可查），`byName` 按楼名匹配（同名楼一起生效）
-- 值给 `{"height": 米}` 或 `{"levels": 层数}`（按 3.3m/层换算）
-- 改完重跑 `py scripts/build_scene_data.py`，刷新页面生效
-- 信息卡"来源"栏会显示该楼高度是 OSM 标注 / 层数推算 / 面积估算 / 人工校准
+启动本地服务后，在 Windows/Chrome 和 Node 22 环境执行 `node scripts/qa_browser.mjs`，截图与报告写入 `work/qa/`。它会实际加载并解码 GLB，检查庭院屋面、11 个地点、竖屏投影、详情按钮、整栋高亮、夜间延迟加载、低画质、搜索、图层、巡游和导航。浏览器尺寸模拟与桌面帧率采样不代表实体手机性能。
 
-## 当前进度（M1–M4 基础版 + v2 精细化完成）
+## 资料精度
 
-- [x] **M1** 数据管线 + 可旋转白模（321 楼 / 531 路 / 14 水面 / 128 绿地）
-- [x] **M2** 点击楼栋信息卡 + hover 高亮、搜索定位、镜头飞行、楼名/湖名标注（距离 LOD）、
-      楼高校准机制（height_overrides，已闭环验证）
-- [x] **M3** 软阴影、程序化示意树 1120 株、昼/昏/夜三档光照
-- [x] **M4** 性能优化、手机适配（紧凑面板 + 信息卡底部抽屉 + 触摸手势）
-- [x] **v2-建筑立面**：楼型分类（宿舍/教学/食堂/礼堂/实验/办公）× 自制窗带纹理图集，
-      UV 按层高对齐（窗口行严格对齐楼层），女儿墙 + 屋顶设备块，同楼色调微差异
-- [x] **v2-道路与地表**：道路分级（沥青深灰 + 人行道衬带 + 主路中央虚线）、草地基调、
-      湖岸沙色环带、操场按运动类型分色（跑道红/网球蓝绿/篮球…）、步行广场铺装
-- [x] **v2-地标精模（Blender）**：`scripts/blender/build_models.py` 参数化建模 +
-      无头渲染预览 + GLB 导出，前端 GLTFLoader 加载（失败自动回落参数化模块）。
-      覆盖 图书馆（红棕裙楼+百叶板塔+塔顶校名）、信息大楼（白色框架网格外骨骼）、
-      体育馆（弧形金属肋屋顶+红砖基座）、学生活动中心（锈红新月+深窗洞）、
-      工科大楼（参数化演绎，**待实拍校准**）、东门（四石柱门柱广场）、
-      北门（复刻老校门白穿孔板墙）、西门（简约门，**待实拍校准**）。
-      参考照片来自重大官网"光影重大"图集（work/refs/）
-- [x] **v2-校界裁剪**：OSM 边界 way 239537195 裁剪，校外 43 个假名清除（川美/重师/酒店等），
-      校外建筑淡灰背景化，白色校界线，真实三门 北门/东门/西门（西门为西侧 barrier 节点，**待实拍校准**）
-- [x] **v2-步行导航**：OSM 路网建图（2671 节点/2986 边）+ A* 寻路，点选道路设起点、
-      点楼栋/搜索设终点，橙色路线 + 距离/步行时间
-- [ ] **M9+**（可选）自动巡游、精模纹理细化、更多地标
+细节由官方资料、照片和现有 OSM 轮廓共同约束，**不是测绘复原**。一教有五层及互通楼翼的文字证据，完整立面资料不足；综合楼、信息楼楼高仍按层数推算。信息楼资料中的 36 m 是连廊跨度，9.4 m 是桁架高度。
 
-架构详情见 `docs/架构备忘.md`，数据来源记录见 `data/sources.json`。
-
-## 已知限制 / 待校准
-
-- 楼高仅 6 栋有 OSM 真实标注，其余为估算——可按上面的校准流程逐栋修正
-- **工科大楼**精模无实拍参考，为参数化演绎；**西门**为简约门占位且无实拍——
-  欢迎提供实拍照片或位置修正
-- 体育馆 OSM 轮廓较粗（五边形），且高度为估算
-- 树木为程序化示意分布，非真实绿化图
-- Blender 精模重建命令：`D:\tools\blender-4.5.9-windows-x64\blender.exe -b --python scripts\blender\build_models.py -- --asset all`
+工科大楼和西门仍是保守示意，缺少已核实的外观照片。其他建筑的窗距、背立面、庭院深度与部分构件位置也含估算；树木是示意分布。详见 [资料与实施记录](docs/2026-10-16-landmarks-v7.md) 和 `data/landmark_details.json`。
 
 ## 许可
 
-代码采用 [MIT License](LICENSE)。地图数据 © OpenStreetMap 贡献者（ODbL）；精模参考照片来自重庆大学官网「光影重大」图集。
+代码采用 [MIT License](LICENSE)。地图数据 © OpenStreetMap 贡献者，ODbL；参考照片来自重庆大学公开图集，照片权利属于原权利人。Draco 解码器使用 Apache License 2.0，见 `public/draco/`。

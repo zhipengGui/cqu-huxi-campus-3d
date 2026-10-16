@@ -25,7 +25,7 @@ import {
   type BuildingUserData,
 } from "./interact";
 import { initSearch, type SearchItem } from "./search";
-import { DayNight, type PresetName } from "./dayNight";
+import { DayNight, applyBuildingEmissive, type PresetName } from "./dayNight";
 import { buildActivity, buildGate, buildGym, buildLikelou, buildLibrary, buildZonghe, gateLabel } from "./landmarks";
 import { buildSportsMarks } from "./sports";
 import { Navigator } from "./navigation";
@@ -114,6 +114,8 @@ renderer.domElement.addEventListener("pointerup", (e) => {
   if (!d || !navMode || !navigator) return;
   const maxMove = e.pointerType === "touch" ? 10 : 6;
   if (Math.hypot(e.clientX - d[0], e.clientY - d[1]) > maxMove) return;
+  // The building picker owns building taps; do not also set the ground behind it.
+  if (picker?.hitAt(e.clientX, e.clientY)) return;
   raycaster.setFromCamera(
     new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1),
     camera,
@@ -168,6 +170,7 @@ function tagAsset(g: THREE.Group, b: Building, root: THREE.Group): void {
     Object.assign(mesh.userData, { id: b.id, name: b.name, type: b.type, style: b.style,
       height: b.height, heightSource: b.heightSource, area: b.area, cx, cy: -cy, pickRoot: root });
   });
+  applyBuildingEmissive(g);
 }
 
 async function loadLandmarkGLB(asset: string, b: Building): Promise<THREE.Group | null> {
@@ -277,8 +280,8 @@ function focusBuilding(mesh: THREE.Mesh | null, view = "overview"): void {
   if (!mesh) return;
   const box = boundsOf(mesh);
   const usableWidth = window.innerWidth > 640 ? Math.max(240, window.innerWidth - 350) : window.innerWidth;
-  const usableHeight = window.innerWidth > 640 ? window.innerHeight : window.innerHeight * .53;
-  const fit = frameBox(box, camera.fov, usableWidth / usableHeight);
+  const usableHeight = window.innerWidth > 640 ? window.innerHeight : window.innerHeight * .48;
+  const fit = frameBox(box, camera.fov, {width: window.innerWidth, height: window.innerHeight, usableWidth, usableHeight});
   const center = fit.target;
   let distance = fit.distance;
   let dir = new THREE.Vector3(.70,.80,1.0);
@@ -300,7 +303,7 @@ function homeView(): void {
     window.innerWidth > 640 ? -150 : 0, window.innerWidth <= 640 ? window.innerHeight * .20 : 0,
     window.innerWidth, window.innerHeight);
   const usable = Math.max(240, window.innerWidth - (window.innerWidth > 640 ? 340 : 0));
-  const fit = frameBox(campusBounds, camera.fov, usable / window.innerHeight);
+  const fit = frameBox(campusBounds, camera.fov, {width: window.innerWidth, height: window.innerHeight, usableWidth: usable});
   flyTo(camera, controls, fit.target, fit.distance * (window.innerWidth > 640 ? .70 : .90), 1100, new THREE.Vector3(.28,1.45,1));
 }
 

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { currentBaseEmissive } from "./dayNight";
+import { applyBuildingEmissive } from "./dayNight";
+import { placeRoot } from "./landmarkViews";
 
 /** 楼栋拾取：hover 高亮 + 点击信息卡。区分"点击"与"拖拽"（位移阈值）。 */
 
@@ -75,12 +76,20 @@ export class BuildingPicker {
   }
 
   private setEmissive(mesh: THREE.Mesh, hex: number): void {
-    const mat = mesh.material as THREE.MeshLambertMaterial;
-    if (mat && mat.emissive) mat.emissive.setHex(hex);
+    const root = placeRoot(mesh);
+    root.userData.highlightColor = hex;
+    applyBuildingEmissive(root);
   }
 
   private restore(mesh: THREE.Mesh): void {
-    this.setEmissive(mesh, mesh === this.selectedMesh ? SELECT_EMISSIVE : currentBaseEmissive());
+    const root = placeRoot(mesh);
+    if (this.selectedMesh && root === placeRoot(this.selectedMesh)) root.userData.highlightColor = SELECT_EMISSIVE;
+    else delete root.userData.highlightColor;
+    applyBuildingEmissive(root);
+  }
+
+  private samePlace(a: THREE.Mesh | null, b: THREE.Mesh | null): boolean {
+    return a === b || (!!a && !!b && placeRoot(a) === placeRoot(b));
   }
 
   private cast(ndcX: number, ndcY: number): THREE.Mesh | null {
@@ -94,23 +103,26 @@ export class BuildingPicker {
     return (hit?.object as THREE.Mesh) ?? null;
   }
 
+  hitAt(clientX: number, clientY: number): THREE.Mesh | null {
+    return this.cast((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+  }
+
   private updateHover(): void {
     const target = this.cast(this.pointerNdc.x, this.pointerNdc.y);
-    if (target !== this.hoverMesh) {
-      if (this.hoverMesh && this.hoverMesh !== this.selectedMesh) this.restore(this.hoverMesh);
+    if (!this.samePlace(target, this.hoverMesh)) {
+      if (this.hoverMesh && !this.samePlace(this.hoverMesh, this.selectedMesh)) this.restore(this.hoverMesh);
       this.hoverMesh = target;
-      if (target && target !== this.selectedMesh) this.setEmissive(target, HOVER_EMISSIVE);
+      if (target && !this.samePlace(target, this.selectedMesh)) this.setEmissive(target, HOVER_EMISSIVE);
       this.dom.style.cursor = target ? "pointer" : "";
     }
   }
 
   private pick(clientX: number, clientY: number): void {
-    const mesh = this.cast((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
-    if (mesh === this.selectedMesh) return;
-    if (this.selectedMesh) this.restore(this.selectedMesh);
-    this.selectedMesh = mesh;
+    const mesh = this.hitAt(clientX, clientY);
+    if (this.samePlace(mesh, this.selectedMesh)) return;
+    this.clearSelection(false);
     if (mesh) {
-      this.setEmissive(mesh, SELECT_EMISSIVE);
+      this.select(mesh);
       this.cb.onSelect(mesh);
     } else {
       this.cb.onClear();
@@ -119,17 +131,18 @@ export class BuildingPicker {
 
   /** 搜索等外部入口直接选中某楼（只高亮，不触发回调——调用方自理界面） */
   select(mesh: THREE.Mesh): void {
-    if (this.selectedMesh) this.restore(this.selectedMesh);
+    this.clearSelection(false);
     this.selectedMesh = mesh;
     this.setEmissive(mesh, SELECT_EMISSIVE);
   }
 
-  clearSelection(): void {
+  clearSelection(notify = true): void {
     if (this.selectedMesh) {
-      this.restore(this.selectedMesh);
+      const old = this.selectedMesh;
       this.selectedMesh = null;
+      this.restore(old);
     }
-    this.cb.onClear();
+    if (notify) this.cb.onClear();
   }
 }
 

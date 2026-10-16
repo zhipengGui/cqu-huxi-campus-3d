@@ -5,6 +5,7 @@ blender -b --python scripts/blender/build_priority.py -- --asset all
 import argparse
 import json
 import math
+import struct
 from pathlib import Path
 import sys
 
@@ -321,12 +322,16 @@ def export_asset(asset, config, building, detail):
         for f in faces:
             a,b,c=(Vector(vertices[i]) for i in f[:3])
             assert (b-a).cross(c-a).length>1e-8,'degenerate face'
+    # Count the complete export, including the library's converted font geometry.
+    exported=path.read_bytes()
+    gltf=json.loads(exported[20:20+struct.unpack_from('<I',exported,12)[0]])
+    triangle_count=sum(gltf['accessors'][p['indices']]['count']//3 for mesh in gltf['meshes'] for p in mesh['primitives'])
     report={
         'asset':asset,'buildingId':config['id'],'detail':'near' if detail else 'far',
         'courtyards':len(rings)-1,'roofCourtyardsOpen':True,
         'bounds':[[min(v[k] for v in all_v) for k in range(3)],[max(v[k] for v in all_v) for k in range(3)]],
-        'triangles':sum(sum(len(f)-2 for f in faces) for _,faces in model.parts.values()),
-        'bytes':path.stat().st_size,'materials':len(model.parts),'heightConfidence':config['heightConfidence']
+        'triangles':triangle_count,
+        'bytes':path.stat().st_size,'materials':len(gltf.get('materials',[])),'heightConfidence':config['heightConfidence']
     }
     (out/(asset+('' if detail else '.far')+'.json')).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
     render=ROOT/'work'/'render';render.mkdir(parents=True,exist_ok=True)

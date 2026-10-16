@@ -37,7 +37,7 @@
     }
     #hud-head {
       display: flex; align-items: center; gap: 8px;
-      padding: 11px 14px 9px;
+      padding: 11px 14px 9px; flex: none;
     }
     #hud-head .title { font-weight: 700; font-size: 15px; flex: 1; }
     #hud-fold {
@@ -174,9 +174,9 @@
     [hidden] { display: none !important; }
     .building-views { display:flex; gap:6px; margin:12px 0; }
     .building-views button { flex:1; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--panel-bg); color:inherit; cursor:pointer; }
-    #place-detail { display: none; }
+    #place-detail { display: none; overflow-y: auto; min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; }
     #place-detail.open { display: block; }
-    #hud.detail-mode .hud-tabs,
+    #hud.detail-mode #hud-tabs,
     #hud.detail-mode .tab-page,
     #hud.detail-mode #tour-start { display: none; }
     #hud.detail-mode #place-detail { display: block; }
@@ -261,6 +261,8 @@
     @media (max-width: 640px) {
       #hud { width: auto; right: 12px; max-height: 42vh; top:auto; bottom:12px; }
       #hud.detail-mode #pd-photo { height: 90px; }
+      #tour-bar { top: 58px; bottom: auto; width: calc(100vw - 24px); box-sizing: border-box; flex-wrap: wrap; gap: 6px; }
+      #tour-desc, #tour-timer { display: none; }
       #tools { top:12px; right:12px; transform:none; flex-direction:row; gap:4px; }
       #tools button { width:32px; height:34px; font-size:17px; }
       #hud-head { padding: 9px 12px 7px; }

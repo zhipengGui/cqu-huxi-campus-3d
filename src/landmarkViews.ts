@@ -1,11 +1,15 @@
 import * as THREE from "three";
 
 /** Fit the complete asset into the unoccluded viewport, including portrait screens. */
-export function frameBox(box: THREE.Box3, fov: number, aspect: number): { target: THREE.Vector3; distance: number } {
+export function frameBox(box: THREE.Box3, fov: number,
+  viewport: { width: number; height: number; usableWidth?: number; usableHeight?: number },
+): { target: THREE.Vector3; distance: number } {
   const target = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  const vertical = THREE.MathUtils.degToRad(fov / 2);
-  const horizontal = Math.atan(Math.tan(vertical) * Math.max(.25, aspect));
+  const tangent = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+  // Cropping UI space does not change the physical camera aspect or its FOV.
+  const vertical = Math.atan(tangent * (viewport.usableHeight ?? viewport.height) / viewport.height);
+  const horizontal = Math.atan(tangent * (viewport.usableWidth ?? viewport.width) / viewport.height);
   const radius = size.length() / 2;
   return { target, distance: Math.max(55, radius / Math.sin(Math.min(vertical, horizontal)) * 1.12) };
 }
