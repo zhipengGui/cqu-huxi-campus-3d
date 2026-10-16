@@ -1,0 +1,23 @@
+{
+  "asset": "zonghe",
+  "buildingId": 14628790,
+  "detail": "near",
+  "courtyards": 4,
+  "roofCourtyardsOpen": true,
+  "bounds": [
+    [
+      -77.0906502941043,
+      -56.12587483142385,
+      0.0
+    ],
+    [
+      77.09073312087843,
+      56.12575348659112,
+      16.34
+    ]
+  ],
+  "triangles": 86518,
+  "bytes": 1017800,
+  "materials": 8,
+  "heightConfidence": "OSM levels × 3.3m; not surveyed"
+}
